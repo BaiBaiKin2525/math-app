@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>さんすう れんしゅう</title>
+  <meta name="theme-color" content="#ff8a3d">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="さんすう">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ホーム：レベルをえらぶ -->
+  <section id="home" class="screen active">
+    <h1>さんすう れんしゅう</h1>
+    <div id="level-groups"></div>
+  </section>
+
+  <!-- もんだい -->
+  <section id="quiz" class="screen">
+    <header class="quiz-bar">
+      <button id="quit" class="small-btn" aria-label="やめる">✕ やめる</button>
+      <div id="progress" class="progress"></div>
+      <div id="timer" class="timer">0:00</div>
+    </header>
+
+    <div class="quiz-body">
+      <div class="left">
+        <div id="formula" class="formula"></div>
+        <div id="visual" class="visual"></div>
+        <div class="visual-tools">
+          <button id="merge-btn" class="tool-btn">🧲 がっちゃん</button>
+          <button id="count-btn" class="tool-btn">👆 かぞえる</button>
+          <button id="hide-btn" class="tool-btn">🙈 えを かくす</button>
+        </div>
+      </div>
+      <div class="right">
+        <div id="message" class="message"></div>
+        <div id="keypad" class="keypad"></div>
+      </div>
+    </div>
+
+    <div id="judge" class="judge"></div>
+  </section>
+
+  <!-- くく タイムアタック -->
+  <section id="ta" class="screen">
+    <header class="quiz-bar">
+      <button id="ta-quit" class="small-btn">✕ やめる</button>
+      <div class="ta-bar"><div id="ta-fill" class="ta-fill"></div></div>
+      <div id="ta-time" class="timer ta-time">150</div>
+    </header>
+    <div class="quiz-body">
+      <div class="left ta-left">
+        <div id="ta-score" class="ta-score"></div>
+        <div id="ta-formula" class="formula"></div>
+        <button id="ta-start" class="big-btn orange ta-start">よーい スタート！</button>
+      </div>
+      <div class="right">
+        <div id="ta-keypad" class="keypad"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- けっか -->
+  <section id="result" class="screen">
+    <div id="result-mark" class="result-mark"></div>
+    <div id="result-text" class="result-text"></div>
+    <div id="result-wrong" class="result-wrong"></div>
+    <div id="result-extra"></div>
+    <div class="result-buttons">
+      <button id="retry-wrong" class="big-btn orange">まちがえた もんだいを もういちど</button>
+      <button id="retry-all" class="big-btn blue">もういちど</button>
+      <button id="go-home" class="big-btn gray">もどる</button>
+    </div>
+  </section>
+
+  <script src="problems.js"></script>
+  <script src="tiles.js"></script>
+  <script src="board.js"></script>
+  <script src="app.js"></script>
+  <script src="timeattack.js"></script>
+</body>
+</html>
