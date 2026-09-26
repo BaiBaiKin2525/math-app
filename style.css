@@ -494,3 +494,5 @@ h1 {
   .right:has(.side:not(:empty)) .keypad { grid-area: keys; }
   .hissan { font-size: 44px; }
 }
+/* タイルなし（3けた）：ひっさんを えの ばしょに おおきく */
+.hissan-big .hissan { font-size: clamp(64px, 12vh, 120px); }

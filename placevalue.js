@@ -30,7 +30,8 @@ const PV_ITEMS = [
   { kind: 'plate', w: 10, h: 10, cap: 3 },
 ];
 
-function createPlaceValueView(box, q) {
+// tiles: false なら タイルを ださず、ひっさんを おおきく かく
+function createPlaceValueView(box, q, { tiles = true } = {}) {
   const cols = addColumns(q.a, q.b);
   const n = cols.length;
   const view = {
@@ -79,6 +80,10 @@ function createPlaceValueView(box, q) {
 
   view.draw = () => {
     box.innerHTML = '';
+    if (!tiles) {
+      box.innerHTML = `<div class="hissan-big">${view.hissanHTML()}</div>`;
+      return;
+    }
     const r = box.getBoundingClientRect();
     const { u, g, widths } = fit(r.width - 30, r.height - 30);
     box.style.setProperty('--u', `${u}px`);

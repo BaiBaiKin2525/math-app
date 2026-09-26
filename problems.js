@@ -99,7 +99,7 @@ const LEVELS = [
   },
   {
     id: 'addn3', type: 'addn', group: 'おおきい かずの たしざん',
-    title: '3けた', desc: '3けた + 3けた（356 + 278 など）',
+    title: '3けた', desc: '3けた + 3けた（356 + 278 など）', tiles: false, // ひっさん だけ
     make: () => generate(QUESTIONS_PER_SET, () => {
       let a, b;
       do {

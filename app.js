@@ -224,7 +224,7 @@ function mountVisual() {
   if (type === 'add' || type === 'sub') {
     state.view = createTileView(box, type, q, { onRemoveDone });
   } else if (type === 'addn') {
-    state.view = createPlaceValueView(box, q);
+    state.view = createPlaceValueView(box, q, { tiles: state.level.tiles !== false });
   } else {
     const up = (v) => Math.max(10, Math.min(100, Math.ceil((v + 1) / 10) * 10));
     const size = type === 'mul' ? { xMax: 10, yMax: 10 } : { xMax: up(q.a), yMax: up(q.b) };
@@ -233,12 +233,14 @@ function mountVisual() {
   state.view.layout();
 }
 
-const canHide = (type) => type === 'add' || type === 'sub' || type === 'addn';
+const hasTiles = () => state.level.tiles !== false;
+const canHide = (type) => type === 'add' || type === 'sub' || (type === 'addn' && hasTiles());
 
-// みぎの ひっさん（おおきい かずの たしざん だけ）
+// みぎの ひっさん（タイルつきの おおきい かずの たしざん だけ。タイルなしは えの ばしょに おおきく かく）
 function renderSide() {
   const view = state.view;
-  $('side').innerHTML = state.level.type === 'addn' && view && view.hissanHTML ? view.hissanHTML() : '';
+  const show = state.level.type === 'addn' && hasTiles() && view && view.hissanHTML;
+  $('side').innerHTML = show ? view.hissanHTML() : '';
 }
 
 function setupTools(type) {
@@ -451,7 +453,9 @@ function hintText() {
   if (type === 'add') return 'おしい！「がっちゃん」や「かぞえる」で たしかめよう';
   if (type === 'sub') return 'おしい！「かぞえる」で のこりを かぞえよう';
   if (type === 'mul') return 'おしい！「かぞえる」で たしかめよう';
-  if (type === 'addn') return 'おしい！この くらいの タイルを ぜんぶ かぞえて みよう';
+  if (type === 'addn') {
+    return hasTiles() ? 'おしい！この くらいの タイルを ぜんぶ かぞえて みよう' : 'おしい！もういちど たして みよう';
+  }
   const step = curStep();
   if (step.total) return 'おしい！へやの かずを じゅんに たしてみよう';
   return 'おしい！10 の まとまりが いくつ あるかな？';
