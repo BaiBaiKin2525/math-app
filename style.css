@@ -251,9 +251,13 @@ h1 {
 /* かけざんの タイルばん */
 .board { touch-action: none; display: block; }
 .board .axis { fill: #f3ece4; }
-.board .axis.active { fill: #ffd9bd; animation: glow 1.2s ease-in-out infinite; }
-@keyframes glow { 50% { fill: #ffbe8f; } }
-.board .axis-sel { fill: #ffb27a; }
+.board .axis.x.active { fill: #d6e6ff; animation: glow-x 1.2s ease-in-out infinite; }
+.board .axis.y.active { fill: #ffe0c7; animation: glow-y 1.2s ease-in-out infinite; }
+@keyframes glow-x { 50% { fill: #a9c9ff; } }
+@keyframes glow-y { 50% { fill: #ffc195; } }
+
+.board .axis-sel.x { fill: #9cc2ff; }
+.board .axis-sel.y { fill: #ffb784; }
 .board .tick { fill: var(--ink); text-anchor: middle; dominant-baseline: central; font-weight: bold; }
 .board .board-bg { fill: #fff; stroke: #cfc3b8; stroke-width: 1.5; }
 .board .grid { stroke: #efe6da; stroke-width: 1; }
@@ -276,7 +280,8 @@ h1 {
 }
 .board .region-value { fill: #c0392b; }
 .board .rowsum { fill: var(--orange); dominant-baseline: central; font-weight: bold; }
-.board .bubble { fill: var(--orange); }
+.board .bubble.x { fill: var(--dot-b); }
+.board .bubble.y { fill: var(--orange); }
 .board .bubble-text { fill: #fff; text-anchor: middle; dominant-baseline: central; font-weight: bold; }
 .visual-tools { display: flex; gap: 10px; }
 .tool-btn {
@@ -408,3 +413,84 @@ h1 {
 .ranking li::before { content: counter(rank) "い"; width: 2.5em; color: var(--sub); }
 .ranking li span { margin-left: auto; color: var(--sub); font-size: 18px; }
 .ranking li.me { background: #fff1c2; }
+/* ---------- おおきい かずの たしざん ---------- */
+.side:empty { display: none; }
+.hissan {
+  display: grid;
+  font-size: clamp(40px, 5.5vw, 60px);
+  font-weight: bold;
+  line-height: 1.15;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.hissan .h-cell { border-radius: 8px; }
+.hissan .h-cell.act { background: #ffe3cf; }
+.hissan .h-carry { font-size: .45em; color: #d68a00; align-self: end; }
+.hissan .h-a { color: var(--dot-a); }
+.hissan .h-b { color: var(--dot-b); }
+.hissan .h-op { color: var(--sub); }
+.hissan .h-ans, .hissan .h-line { border-top: 4px solid var(--ink); }
+.hissan .h-ans.act { color: var(--orange); }
+
+.pv { display: grid; column-gap: 28px; row-gap: 10px; align-items: end; }
+.pv-op { font-size: 32px; font-weight: bold; color: var(--sub); align-self: center; text-align: center; }
+.pv-head {
+  font-size: 15px;
+  color: var(--sub);
+  text-align: center;
+  border-bottom: 3px solid var(--line);
+  padding-bottom: 4px;
+  white-space: nowrap;
+}
+.pv-head.active { color: var(--orange); border-color: var(--orange); font-weight: bold; }
+.pv-head.done { color: var(--green); border-color: var(--green); }
+.pv-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--g);
+  align-content: flex-end;
+  justify-content: center;
+  min-height: var(--u);
+  padding: 6px 4px;
+  border-radius: 10px;
+}
+.pv-cell.lower { border-top: 2px dashed var(--line); }
+.pv-cell.active { background: #fff1e5; }
+.pv-item { flex: none; border: 1px solid rgba(0, 0, 0, .25); transition: opacity .4s; }
+.pv-item.unit { width: var(--u); height: var(--u); border-radius: 2px; }
+.pv-item.bar {
+  width: var(--u);
+  height: calc(var(--u) * 10);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 calc(var(--u) - 1px), rgba(255, 255, 255, .7) calc(var(--u) - 1px) var(--u));
+}
+.pv-item.plate {
+  width: calc(var(--u) * 10);
+  height: calc(var(--u) * 10);
+  background-image:
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--u) - 1px), rgba(255, 255, 255, .6) calc(var(--u) - 1px) var(--u)),
+    repeating-linear-gradient(to right, transparent 0 calc(var(--u) - 1px), rgba(255, 255, 255, .6) calc(var(--u) - 1px) var(--u));
+}
+.pv-item.a { background-color: var(--dot-a); }
+.pv-item.b { background-color: var(--dot-b); }
+.pv-item.k { background-color: var(--lit); border-color: #c99a00; }
+.pv-item.gone { opacity: .15; }
+.pv-item.pop { animation: carry-in .7s ease-out; }
+@keyframes carry-in {
+  from { transform: translateX(calc(var(--u) * 6)) scale(.6); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+/* たてむき：ひっさんを テンキーの よこに おく（タイルの ばしょを ひろく） */
+@media (orientation: portrait) {
+  .right:has(.side:not(:empty)) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "msg msg" "side keys";
+    align-items: center;
+    justify-items: center;
+    column-gap: 24px;
+  }
+  .right:has(.side:not(:empty)) .message { grid-area: msg; }
+  .right:has(.side:not(:empty)) .side { grid-area: side; }
+  .right:has(.side:not(:empty)) .keypad { grid-area: keys; }
+  .hissan { font-size: 44px; }
+}

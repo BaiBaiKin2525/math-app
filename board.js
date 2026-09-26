@@ -87,10 +87,11 @@ function createBoard(box, { xMax, yMax, split, onPick, onChange }) {
     const s = [];
 
     // めもりの おび（いま えらぶ ほうが ひかる）
-    s.push(rect(ox, oy - AX + 3, bw, AX - 6, b.mode === 'pick-x' ? 'axis active' : 'axis', 'rx="8"'));
-    s.push(rect(ox - AX + 3, oy, AX - 6, bh, b.mode === 'pick-y' ? 'axis active' : 'axis', 'rx="8"'));
-    if (X) s.push(rect(ox, oy - AX + 3, X * u, AX - 6, 'axis-sel', 'rx="8"'));
-    if (Y) s.push(rect(ox - AX + 3, oy, AX - 6, Y * u, 'axis-sel', 'rx="8"'));
+    // よこ＝しきの まえの かず（あお）、たて＝うしろの かず（オレンジ）
+    s.push(rect(ox, oy - AX + 3, bw, AX - 6, b.mode === 'pick-x' ? 'axis x active' : 'axis', 'rx="8"'));
+    s.push(rect(ox - AX + 3, oy, AX - 6, bh, b.mode === 'pick-y' ? 'axis y active' : 'axis', 'rx="8"'));
+    if (X) s.push(rect(ox, oy - AX + 3, X * u, AX - 6, 'axis-sel x', 'rx="8"'));
+    if (Y) s.push(rect(ox - AX + 3, oy, AX - 6, Y * u, 'axis-sel y', 'rx="8"'));
 
     const fs = Math.min(17, AX * 0.45);
     const sx = labelStep(xMax);
@@ -153,12 +154,12 @@ function createBoard(box, { xMax, yMax, split, onPick, onChange }) {
     }
 
     // いまの めもりの かず（ふきだし）
-    const bubble = (cx, cy, v) => {
+    const bubble = (cx, cy, v, axis) => {
       const w = String(v).length > 1 ? AX * 1.05 : AX * 0.8;
-      return rect(cx - w / 2, cy - AX * 0.4, w, AX * 0.8, 'bubble', 'rx="10"') + text(cx, cy, v, 'bubble-text', AX * 0.5);
+      return rect(cx - w / 2, cy - AX * 0.4, w, AX * 0.8, `bubble ${axis}`, 'rx="10"') + text(cx, cy, v, 'bubble-text', AX * 0.5);
     };
-    if (X) s.push(bubble(ox + (X - 0.5) * u, oy - AX / 2, X));
-    if (Y) s.push(bubble(ox - AX / 2, oy + (Y - 0.5) * u, Y));
+    if (X) s.push(bubble(ox + (X - 0.5) * u, oy - AX / 2, X, 'x'));
+    if (Y) s.push(bubble(ox - AX / 2, oy + (Y - 0.5) * u, Y, 'y'));
 
     svg.innerHTML = s.join('');
   };

@@ -6,7 +6,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const HISTORY_KEY = 'mathapp.v1.history';
 const MAX_DIGITS = 4;
-const OPS = { add: '+', sub: '−', mul: '×', mul2: '×' };
+const OPS = { add: '+', sub: '−', mul: '×', mul2: '×', addn: '+' };
 
 const state = {
   level: null,
@@ -95,6 +95,7 @@ function show(id) {
 const GROUP_ICONS = {
   'たしざん': '➕',
   'ひきざん': '➖',
+  'おおきい かずの たしざん': '🧮',
   'かけざん（くく）': '✖️',
   'くく タイムアタック': '⏱️',
   '2けたの かけざん': '🔢',
@@ -152,6 +153,12 @@ function buildSteps(type, q) {
       return [{ kind: 'remove' }, { kind: 'answer', expected: a - b }];
     case 'mul':
       return [{ kind: 'pick-x' }, { kind: 'pick-y' }, { kind: 'answer', expected: a * b }];
+    case 'addn':
+      // いちの くらいから じゅんに。くりあがりが あれば 「1 + 4 + 3」の ように たす
+      return addColumns(a, b).filter((c) => !c.auto).map((c) => ({
+        kind: 'answer', expected: c.sum, place: c.place,
+        formula: [c.carryIn || null, c.da, c.db].filter((v) => v !== null).join(' + '),
+      }));
     case 'mul2': {
       const regions = splitRegions(a, b);
       return [
@@ -216,6 +223,8 @@ function mountVisual() {
   box.classList.toggle('hidden', state.hideVisual && canHide(type));
   if (type === 'add' || type === 'sub') {
     state.view = createTileView(box, type, q, { onRemoveDone });
+  } else if (type === 'addn') {
+    state.view = createPlaceValueView(box, q);
   } else {
     const up = (v) => Math.max(10, Math.min(100, Math.ceil((v + 1) / 10) * 10));
     const size = type === 'mul' ? { xMax: 10, yMax: 10 } : { xMax: up(q.a), yMax: up(q.b) };
@@ -224,7 +233,13 @@ function mountVisual() {
   state.view.layout();
 }
 
-const canHide = (type) => type === 'add' || type === 'sub';
+const canHide = (type) => type === 'add' || type === 'sub' || type === 'addn';
+
+// みぎの ひっさん（おおきい かずの たしざん だけ）
+function renderSide() {
+  const view = state.view;
+  $('side').innerHTML = state.level.type === 'addn' && view && view.hissanHTML ? view.hissanHTML() : '';
+}
 
 function setupTools(type) {
   $('count-btn').style.display = ['add', 'sub', 'mul'].includes(type) ? '' : 'none';
@@ -250,6 +265,7 @@ function enterStep() {
     view.activeRegion = step.region ?? -1;
   }
   if (step.kind === 'remove') view.locked = false;
+  if (step.place !== undefined) view.active = step.place;
   // タイルを とる あいだは えを かくさない
   $('visual').classList.toggle('hidden',
     state.hideVisual && canHide(state.level.type) && step.kind !== 'remove');
@@ -257,12 +273,14 @@ function enterStep() {
   if (step.kind === 'pick-x') say(`よこの めもりを なぞって 「${q.a}」を えらぼう 👉`);
   else if (step.kind === 'pick-y') say(`たての めもりを なぞって 「${q.b}」を えらぼう 👇`);
   else if (step.kind === 'remove') say(`タイルを タップして ${q.b}こ とろう`);
+  else if (step.place !== undefined) say(`${PLACE_NAMES[step.place]}の くらいを たそう`);
   else if (step.region !== undefined) say('ひかっている へやは いくつ？');
   else if (step.total) say('へやを ぜんぶ たすと？');
   else say('');
 
   renderFormula();
   renderKeypad();
+  renderSide();
   view.draw();
 }
 
@@ -336,7 +354,7 @@ function renderFormula(answerColor) {
   if (step && step.formula) {
     el.classList.toggle('long', step.formula.length > 8);
     el.innerHTML = `
-      <div class="formula-main">${q.a} × ${q.b} ＝ ？</div>
+      <div class="formula-main"><span class="num-a">${q.a}</span> ${OPS[type]} <span class="num-b">${q.b}</span> ＝ ？</div>
       <div class="formula-line"><span>${step.formula}</span><span>=</span>${box}</div>`;
   } else {
     el.innerHTML = `
@@ -418,11 +436,22 @@ function judge(ok) {
   el.classList.add('show');
 }
 
+// ひっさん：くらいの こたえを かいて、10 こ あれば となりへ くりあげる
+function resolvePlace(step, isLast) {
+  state.view.active = -1;
+  state.view.resolve(step.place);
+  renderSide();
+  const q = current();
+  if (isLast) say(`こたえは ${q.a + q.b}`);
+  else if (step.expected >= 10) say('10 こ あつまったので となりの くらいへ 1 くりあがり！');
+}
+
 function hintText() {
   const type = state.level.type;
   if (type === 'add') return 'おしい！「がっちゃん」や「かぞえる」で たしかめよう';
   if (type === 'sub') return 'おしい！「かぞえる」で のこりを かぞえよう';
   if (type === 'mul') return 'おしい！「かぞえる」で たしかめよう';
+  if (type === 'addn') return 'おしい！この くらいの タイルを ぜんぶ かぞえて みよう';
   const step = curStep();
   if (step.total) return 'おしい！へやの かずを じゅんに たしてみよう';
   return 'おしい！10 の まとまりが いくつ あるかな？';
@@ -440,9 +469,12 @@ async function checkAnswer() {
       view.answered.add(step.region);
       view.draw();
     }
+    if (step.place !== undefined) resolvePlace(step, isLast);
     judge(true);
     soundOk();
-    await sleep(isLast ? 850 : 650);
+    // くりあがりの ときは タイルが となりへ いくのを みせる
+    const carried = step.place !== undefined && step.expected >= 10;
+    await sleep(isLast ? 850 : carried ? 1600 : 650);
     advanceStep();
     return;
   }
@@ -472,6 +504,11 @@ async function checkAnswer() {
     view.answered.add(step.region);
     view.draw();
   }
+  if (step.place !== undefined) {
+    resolvePlace(step, isLast);
+    say(`こたえは ${step.expected}`, true);
+    return;
+  }
   if (state.level.type !== 'mul2') {
     await sleep(700);
     countAlong();
@@ -495,6 +532,7 @@ function startFree(level) {
     xMax: level.xMax, yMax: level.yMax, split: level.split, onChange: updateFree,
   });
   state.view.mode = 'free';
+  renderSide();
   state.view.showAllValues = true;
   state.view.layout();
   updateFree();

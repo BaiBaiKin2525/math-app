@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v3';
+const VERSION = 'v4';
 const FILES = [
   './',
   'index.html',
@@ -7,6 +7,7 @@ const FILES = [
   'problems.js',
   'tiles.js',
   'board.js',
+  'placevalue.js',
   'app.js',
   'timeattack.js',
   'manifest.json',

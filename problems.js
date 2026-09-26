@@ -74,6 +74,41 @@ const LEVELS = [
       return { a, b: rand(a - 9, 9) };
     }),
   },
+  {
+    id: 'addn1', type: 'addn', group: 'おおきい かずの たしざん',
+    title: '2けた ①', desc: 'くりあがり 1かい（38 + 45 など）',
+    make: () => generate(QUESTIONS_PER_SET, () => {
+      const oa = rand(1, 9);
+      const ob = rand(10 - oa, 9);          // いちの くらいで くりあがる
+      const ta = rand(1, 7);
+      const tb = rand(1, 8 - ta);           // じゅうの くらいは くりあがらない
+      return { a: ta * 10 + oa, b: tb * 10 + ob };
+    }),
+  },
+  {
+    id: 'addn2', type: 'addn', group: 'おおきい かずの たしざん',
+    title: '2けた ②', desc: 'こたえが 100 を こえる（58 + 67 など）',
+    make: () => generate(QUESTIONS_PER_SET, () => {
+      let a, b;
+      do {
+        a = rand(11, 99);
+        b = rand(11, 99);
+      } while (a + b < 100 || a % 10 === 0 || b % 10 === 0);
+      return { a, b };
+    }),
+  },
+  {
+    id: 'addn3', type: 'addn', group: 'おおきい かずの たしざん',
+    title: '3けた', desc: '3けた + 3けた（356 + 278 など）',
+    make: () => generate(QUESTIONS_PER_SET, () => {
+      let a, b;
+      do {
+        a = rand(101, 499);
+        b = rand(101, 499);
+      } while (a % 10 + b % 10 < 10 && Math.floor(a / 10) % 10 + Math.floor(b / 10) % 10 < 10);
+      return { a, b };                      // どこかで かならず くりあがる。こたえは 999 まで
+    }),
+  },
   // かけざん：1〜9 のだん（1〜9 をばらばらの順で 9 もん）
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
     id: `mul${n}`, type: 'mul', group: 'かけざん（くく）',
