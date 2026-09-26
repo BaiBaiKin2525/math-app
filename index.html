@@ -14,8 +14,16 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- だれが やる？ -->
+  <section id="who" class="screen active">
+    <h1>だれが やる？</h1>
+    <div id="who-list" class="who-list"></div>
+    <button id="who-add" class="small-btn who-add">＋ こどもを ふやす</button>
+  </section>
+
   <!-- ホーム：レベルをえらぶ -->
-  <section id="home" class="screen active">
+  <section id="home" class="screen">
+    <div id="home-bar" class="home-bar"></div>
     <h1>さんすう れんしゅう</h1>
     <div id="level-groups"></div>
   </section>
@@ -72,6 +80,7 @@
     <div id="result-mark" class="result-mark"></div>
     <div id="result-text" class="result-text"></div>
     <div id="result-wrong" class="result-wrong"></div>
+    <div id="result-points" class="result-points"></div>
     <div id="result-extra"></div>
     <div class="result-buttons">
       <button id="retry-wrong" class="big-btn orange">まちがえた もんだいを もういちど</button>
@@ -80,6 +89,7 @@
     </div>
   </section>
 
+  <script src="rewards.js"></script>
   <script src="problems.js"></script>
   <script src="tiles.js"></script>
   <script src="board.js"></script>

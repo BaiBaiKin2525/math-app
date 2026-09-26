@@ -29,7 +29,8 @@ const state = {
 
 // ---------- 記録（タブレットの中に保存） ----------
 
-function loadHistory() {
+// ぜんいんの きろく（profile：だれの きろくか）
+function loadAllHistory() {
   try {
     return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
   } catch {
@@ -37,11 +38,18 @@ function loadHistory() {
   }
 }
 
+// いま やっている こどもの きろく
+function loadHistory() {
+  const p = currentProfile();
+  return loadAllHistory().filter((r) => p && r.profile === p.id);
+}
+
 function saveHistory(record) {
   try {
-    const list = loadHistory();
-    list.push(record);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-500)));
+    const p = currentProfile();
+    const list = loadAllHistory();
+    list.push({ ...record, profile: p ? p.id : null });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-1000)));
   } catch {
     // 保存できなくてもアプリは動かす
   }
@@ -102,9 +110,75 @@ const GROUP_ICONS = {
   'タイルで あそぶ': '🧩',
 };
 
-function renderHome() {
+// ---------- だれが やる？ ----------
+
+function renderWho() {
   clearInterval(state.timerId);
   state.countToken++;
+  const root = $('who-list');
+  root.innerHTML = '';
+  for (const p of loadProfiles()) {
+    const wrap = document.createElement('div');
+    wrap.className = 'who-card-wrap';
+    const card = document.createElement('button');
+    card.className = 'who-card';
+    card.innerHTML = `<span class="who-icon">${p.icon}</span><span class="who-name">${p.name}</span>
+      <span class="who-points">⭐ ${todayStatus(p.id).points}</span>`;
+    card.addEventListener('click', () => {
+      setCurrentProfile(p.id);
+      renderHome();
+    });
+    const edit = document.createElement('button');
+    edit.className = 'who-edit';
+    edit.textContent = '✏️ なまえ';
+    edit.addEventListener('click', () => {
+      const name = prompt('なまえ', p.name);
+      if (name) renameProfile(p.id, name);
+      renderWho();
+    });
+    wrap.append(card, edit);
+    root.appendChild(wrap);
+  }
+  show('who');
+}
+
+// ホームの うえ：だれか・ポイント・きょうの もくひょう
+function renderHomeBar() {
+  const p = currentProfile();
+  const s = todayStatus(p.id);
+  const goal = POINT_RULES.dailyGoalSets;
+  const dots = Array.from({ length: goal }, (_, i) => (i < s.day.sets ? '●' : '○')).join('');
+  $('home-bar').innerHTML = `
+    <button id="who-btn" class="who-chip">${p.icon} ${p.name} <small>こうたい</small></button>
+    <div class="today">
+      きょうの もくひょう <span class="goal-dots${s.day.goal ? ' done' : ''}">${dots}</span>
+      ${s.day.goal ? '<b>たっせい！</b>' : `あと ${goal - s.day.sets} セット`}
+      ${s.streak >= 2 ? `<span class="streak">🔥 ${s.streak}にち れんぞく</span>` : ''}
+    </div>
+    <div class="points-chip">⭐ <b>${s.points}</b> pt</div>`;
+  $('who-btn').addEventListener('click', renderWho);
+}
+
+// けっか がめんの ポイント
+function renderEarned(result) {
+  const el = $('result-points');
+  if (!result) {
+    el.innerHTML = '';
+    return;
+  }
+  const rows = result.items.map((it) =>
+    `<li class="${it.big ? 'big' : ''}"><span>${it.label}</span><b>+${it.n}</b></li>`).join('');
+  el.innerHTML = `
+    <div class="earned-total">⭐ +${result.got} pt <small>（ぜんぶで ${result.points} pt）</small></div>
+    ${rows ? `<ul class="earned-list">${rows}</ul>` : ''}
+    ${result.capped ? '<div class="earned-cap">きょうの べんきょう ポイントは じょうげん まで もらったよ。あしたも がんばろう！</div>' : ''}`;
+}
+
+function renderHome() {
+  if (!currentProfile()) return renderWho();
+  clearInterval(state.timerId);
+  state.countToken++;
+  renderHomeBar();
   const root = $('level-groups');
   root.innerHTML = '';
   const groups = [...new Set(LEVELS.map((l) => l.group))];
@@ -484,6 +558,7 @@ async function checkAnswer() {
   }
 
   state.attempts++;
+  state.mistake = true; // 1かいでも まちがえたら「1かいめで せいかい」には しない
   soundNg();
   if (state.attempts === 1) {
     const box = $('answer-box');
@@ -582,6 +657,7 @@ function finish() {
     ? 'まちがえた もんだい： ' + wrong.map((r) => `${r.a} ${op} ${r.b}`).join('、 ')
     : '';
   $('result-extra').innerHTML = '';
+  renderEarned(awardSet({ correct, total, full: !state.isRetry }));
   $('retry-wrong').style.display = wrong.length ? '' : 'none';
   $('retry-wrong').onclick = () =>
     startLevel(state.level, shuffle(wrong.map(({ a, b }) => ({ a, b }))), true);
@@ -630,4 +706,10 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-renderHome();
+$('who-add').addEventListener('click', () => {
+  addProfile();
+  renderWho();
+});
+
+// タブレットを きょうだいで つかうので、ひらく たびに「だれが やる？」から
+renderWho();

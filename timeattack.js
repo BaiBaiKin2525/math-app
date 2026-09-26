@@ -156,9 +156,10 @@ function stopTimeAttack() {
   clearInterval(ta.timerId);
 }
 
+// きょうだい ぜんいんの ランキング
 function taRanking(levelId) {
-  return loadHistory()
-    .filter((r) => r.level === levelId)
+  return loadAllHistory()
+    .filter((r) => r.level === levelId && r.profile)
     .sort((x, y) => y.correct - x.correct || x.date.localeCompare(y.date))
     .slice(0, 5);
 }
@@ -185,11 +186,14 @@ function taEnd() {
     const d = new Date(iso);
     return `${d.getMonth() + 1}/${d.getDate()}`;
   };
+  const profiles = Object.fromEntries(loadProfiles().map((p) => [p.id, p]));
+  const who = (id) => (profiles[id] ? `${profiles[id].icon} ${profiles[id].name}` : '');
   $('result-extra').innerHTML = `
-    <div class="ranking-title">${ta.level.title} ランキング</div>
+    <div class="ranking-title">${ta.level.title} ランキング（みんな）</div>
     <ol class="ranking">${taRanking(ta.level.id)
-      .map((r) => `<li class="${r.date === record.date ? 'me' : ''}"><b>${r.correct}</b>もん<span>${fmt(r.date)}</span></li>`)
+      .map((r) => `<li class="${r.date === record.date ? 'me' : ''}"><b>${r.correct}</b>もん<em>${who(r.profile)}</em><span>${fmt(r.date)}</span></li>`)
       .join('')}</ol>`;
+  renderEarned(awardSet({ correct: ta.correct, total: ta.correct + ta.wrong, full: true }));
 
   $('retry-wrong').style.display = 'none';
   $('retry-all').onclick = () => startTimeAttack(ta.level);
