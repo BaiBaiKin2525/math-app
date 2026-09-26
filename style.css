@@ -724,3 +724,49 @@ h1 {
 .dialog { background: var(--bg); border-radius: 24px; padding: 24px; width: min(100%, 420px); display: flex; flex-direction: column; gap: 20px; }
 .dialog-text { font-size: 24px; font-weight: bold; text-align: center; }
 .dialog-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* ---------- ずかん・おしらせ・きけん ---------- */
+.big-btn.green { background: #3cb46e; }
+.pets-actions .wide { grid-column: span 2; padding: 10px; font-size: 18px; }
+.case-tab.danger { border-color: var(--red); background: #ffecec; }
+.case-list li.danger { background: #ffe0e0; }
+.info-mood.danger { color: var(--red); }
+.sheet.wide { width: min(100%, 900px); height: 100%; }
+.zukan-count { font-size: 16px; color: var(--sub); }
+.zukan-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: 12px; overflow-y: auto; }
+@media (orientation: landscape) and (min-width: 700px) {
+  .zukan-body { grid-template-columns: 1fr 1fr; overflow: hidden; }
+  .zukan-grid, .zukan-detail { overflow-y: auto; }
+}
+.zukan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; }
+.zukan-card {
+  background: var(--card);
+  border: 3px solid #9fd9ae;
+  border-radius: 16px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.zukan-card.unknown { border-color: var(--line); background: #f3ece4; }
+.z-icon { font-size: 36px; }
+.z-name { font-size: 16px; font-weight: bold; }
+.z-rec { font-size: 13px; color: var(--sub); }
+.zukan-detail {
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.zukan-detail p { margin: 8px 0; }
+.z-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.z-stats span { background: #fff6cf; border-radius: 999px; padding: 2px 12px; font-size: 15px; }
+.z-stats b { font-size: 20px; color: var(--orange); }
+.z-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; font-size: 16px; }
+.z-facts dt { color: var(--sub); white-space: nowrap; }
+.z-facts dd { margin: 0; }
+.graves { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.graves small { color: var(--sub); margin-left: 6px; }
+.notice-text { font-size: 22px; line-height: 1.6; }

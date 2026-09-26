@@ -99,6 +99,7 @@
         <div class="pets-actions">
           <button id="feed-btn" class="big-btn orange">🍯 えさを あげる</button>
           <button id="shop-btn" class="big-btn blue">🛒 おみせ</button>
+          <button id="zukan-btn" class="big-btn green wide">📖 ずかん</button>
         </div>
         <div id="inventory" class="inventory"></div>
       </div>
@@ -116,9 +117,31 @@
       <div class="shop-tabs">
         <button class="shop-tab" data-tab="bug">むし</button>
         <button class="shop-tab" data-tab="case">ケース</button>
+        <button class="shop-tab" data-tab="decor">おきもの</button>
         <button class="shop-tab" data-tab="food">えさ</button>
       </div>
       <div id="shop-list" class="shop-list"></div>
+    </div>
+  </div>
+
+  <div id="zukan" class="overlay hidden">
+    <div class="sheet wide">
+      <div class="sheet-head">
+        <b>📖 むしの ずかん</b>
+        <span id="zukan-count" class="zukan-count"></span>
+        <button id="zukan-close" class="small-btn">とじる</button>
+      </div>
+      <div class="zukan-body">
+        <div id="zukan-grid" class="zukan-grid"></div>
+        <div id="zukan-detail" class="zukan-detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="notice" class="overlay hidden">
+    <div class="dialog">
+      <div id="notice-text" class="dialog-text notice-text"></div>
+      <button id="notice-ok" class="big-btn orange">OK</button>
     </div>
   </div>
 

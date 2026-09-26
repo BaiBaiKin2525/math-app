@@ -216,10 +216,10 @@ function buildCase(dims) {
   }
   // とまりぎ と おちば
   const bark = std(0x6b4a2e, { roughness: 0.9 });
-  const log = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.025, w * 0.029, w * 0.55, 10), bark);
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.025, w * 0.029, w * 0.4, 10), bark);
   log.rotation.z = Math.PI / 2;
   log.rotation.y = 0.5;
-  log.position.set(w * 0.05, 1.0, -d * 0.18);
+  log.position.set(-w * 0.1, 1.0, d * 0.26); // おきものは おくに ならべるので、まるたは てまえ
   g.add(log);
   const leaf = std(0x8a6a2a, { roughness: 0.8, side: THREE.DoubleSide });
   for (let i = 0; i < 6; i++) {
@@ -231,6 +231,99 @@ function buildCase(dims) {
   }
   return g;
 }
+
+// ---------- おきもの（むしが あそぶ） ----------
+// どれも はば 14・おくゆき 8 くらいで つくり、ケースに あわせて ちぢめる。
+// path：むしが たどる みち（おきものの なかの ざひょう）。speed：その くかんの はやさの ばいりつ
+//   stay：さいごで まって もどる／ride：ブランコに のる／hide：おうちに かくれる
+
+function buildPerch() {
+  const g = new THREE.Group();
+  const bark = std(0x7a5634, { roughness: 0.9 });
+  g.add(rod(bark, V(0, 0, 0), V(1, 11, 2.5), 0.6, 0.35));
+  g.add(rod(bark, V(0.5, 6, 1.2), V(3.2, 8.2, 1.5), 0.3, 0.2));
+  const stump = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.9, 1, 12), bark);
+  stump.position.y = 0.5;
+  g.add(stump);
+  const leaf = std(0x4f9a4a, { side: THREE.DoubleSide });
+  for (const [x, y, z] of [[3.3, 8.4, 1.5], [1.1, 11.2, 2.6]]) {
+    const l = new THREE.Mesh(new THREE.CircleGeometry(1, 10), leaf);
+    l.scale.set(1, 1.8, 1);
+    l.position.set(x, y, z);
+    l.rotation.set(-1, 0.4, 0);
+    g.add(l);
+  }
+  return { group: g, path: [V(0, 0, 4), V(0, 1, 0.7), V(0.5, 6, 1.4), V(0.95, 10.4, 2.5)], speed: [1, 0.6, 0.6, 0.6], stay: 3.5 };
+}
+
+function buildSlide() {
+  const g = new THREE.Group();
+  const red = std(0xe2553f, { roughness: 0.45 });
+  const yellow = std(0xf2c230, { roughness: 0.45 });
+  for (const x of [-5.8, -4.2]) g.add(rod(red, V(x, 0, 0), V(x, 8.6, 0), 0.25));
+  for (let y = 1.2; y < 8.5; y += 1.4) g.add(rod(yellow, V(-5.8, y, 0), V(-4.2, y, 0), 0.15));
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 2.6), red);
+  deck.position.set(-4.3, 8.2, 0);
+  g.add(deck);
+  const len = Math.hypot(8.2, 7.8);
+  const slope = new THREE.Mesh(new THREE.BoxGeometry(len, 0.3, 2.6), yellow);
+  slope.position.set(1.3, 4.3, 0);
+  slope.rotation.z = -Math.atan2(7.8, 8.2);
+  g.add(slope);
+  for (const z of [-1.4, 1.4]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.6, 0.2), red);
+    rail.position.set(1.3, 4.7, z);
+    rail.rotation.z = slope.rotation.z;
+    g.add(rail);
+  }
+  return {
+    group: g,
+    path: [V(-5, 0, 3.5), V(-5, 0, 0.5), V(-5, 8.5, 0.5), V(-3, 8.5, 0), V(5.2, 0.6, 0), V(7.5, 0, 1.5)],
+    speed: [1, 1, 0.5, 0.7, 3.5, 1.5],
+  };
+}
+
+function buildSwing() {
+  const g = new THREE.Group();
+  const blue = std(0x3f7fd9, { roughness: 0.45 });
+  for (const x of [-4.5, 4.5]) {
+    g.add(rod(blue, V(x, 0, -2), V(x, 10, 0), 0.25));
+    g.add(rod(blue, V(x, 0, 2), V(x, 10, 0), 0.25));
+  }
+  g.add(rod(blue, V(-4.5, 10, 0), V(4.5, 10, 0), 0.3));
+  const pivot = new THREE.Group();
+  pivot.position.set(0, 10, 0);
+  const rope = std(0xd9c9a3);
+  for (const x of [-1.5, 1.5]) pivot.add(rod(rope, V(x, 0, 0), V(x, -6, 0), 0.08));
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.4, 2.2), std(0xf2c230));
+  seat.position.y = -6;
+  pivot.add(seat);
+  g.add(pivot);
+  return { group: g, path: [V(0, 0, 4.5), V(0, 0, 2), V(0, 4.2, 0)], speed: [1, 1, 1.5], ride: 5, pivot, seat, exit: [V(0, 0, 3)] };
+}
+
+function buildHouse() {
+  const g = new THREE.Group();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.6, 5, 16), std(0xf3ead8));
+  stem.position.y = 2.5;
+  g.add(stem);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(4.6, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), std(0xd9443a, { roughness: 0.5 }));
+  cap.position.y = 4.6;
+  cap.scale.y = 0.8;
+  g.add(cap);
+  const dot = std(0xffffff);
+  for (const [a, b] of [[0.4, 0.5], [1.9, 0.8], [3.2, 0.4], [4.5, 0.9], [5.6, 0.6]]) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), dot);
+    s.position.set(Math.cos(a) * 4.6 * Math.sin(b), 4.6 + 3.7 * Math.cos(b), Math.sin(a) * 4.6 * Math.sin(b));
+    g.add(s);
+  }
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.8, 0.3), std(0x5a3920));
+  door.position.set(0, 1.4, 2.35);
+  g.add(door);
+  return { group: g, path: [V(0, 0, 5.5), V(0, 0, 2.6), V(0, 0, 0.5)], speed: [1, 1, 0.8], hide: 4 };
+}
+
+const DECOR_BUILDERS = { perch: buildPerch, slide: buildSlide, swing: buildSwing, house: buildHouse };
 
 // ---------- へや ----------
 
@@ -253,7 +346,9 @@ export function createInsectRoom(container, { onSelect }) {
   controls.maxPolarAngle = 1.35;
 
   let caseGroup = null;
+  let caseDims = null;
   let bounds = { x: 10, z: 6 };
+  let decors = [];
   const actors = new Map();
   let selected = null;
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.1, 32), new THREE.MeshBasicMaterial({ color: 0xff8a3d, transparent: true, opacity: 0.9 }));
@@ -262,18 +357,32 @@ export function createInsectRoom(container, { onSelect }) {
   scene.add(ring);
   const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false });
 
-  function setCase(dims) {
+  // decor：[{ type, slot }]、slots：おける かず
+  function setCase(dims, decor = [], slots = 2) {
     if (caseGroup) scene.remove(caseGroup);
     caseGroup = buildCase(dims);
     scene.add(caseGroup);
-    const [w, d] = dims;
+    const [w, d, h] = dims;
     bounds = { x: w / 2 - 2.5, z: d / 2 - 2.5 };
     caseDims = dims;
+    // おきものは ケースの おくに よこ ならび
+    const k = Math.min((w / slots) / 16, (h - 3) / 13);
+    decors = decor.map(({ type, slot }) => {
+      const build = DECOR_BUILDERS[type];
+      if (!build) return null;
+      const def = build();
+      def.group.scale.setScalar(k);
+      def.group.position.set(-w / 2 + (slot + 0.5) * (w / slots), 0, -d / 2 + 6 * k);
+      caseGroup.add(def.group);
+      caseGroup.updateMatrixWorld(true);
+      const toWorld = (p) => def.group.localToWorld(p.clone());
+      return { ...def, type, k, busy: null, world: def.path.map(toWorld), exitWorld: (def.exit || []).map(toWorld) };
+    }).filter(Boolean);
+    for (const a of actors.values()) stopPlay(a);
     fitCamera();
   }
 
   // ななめ うえから ケース ぜんたいが みえる きょりに する（がめんの たてよこ ひで かわる）
-  let caseDims = null;
   function fitCamera() {
     if (!caseDims) return;
     const [w, d, h] = caseDims;
@@ -289,7 +398,7 @@ export function createInsectRoom(container, { onSelect }) {
   }
 
   function randomSpot() {
-    return V((Math.random() * 2 - 1) * bounds.x, 0, (Math.random() * 2 - 1) * bounds.z);
+    return V((Math.random() * 2 - 1) * bounds.x, 0, (Math.random() * 2 - 1) * bounds.z * 0.4 + bounds.z * 0.45);
   }
 
   function build(p) {
@@ -300,32 +409,37 @@ export function createInsectRoom(container, { onSelect }) {
     return buildBeetle(p.species, p.sizeRatio ?? 0.5);
   }
 
+  const keyOf = (p) => `${p.stage}/${p.lengthCm.toFixed(2)}/${p.weak}/${p.sleeping}`;
+
   function addActor(p) {
     const model = build(p);
     const g = model.group;
     const len = p.lengthCm;
+    g.rotation.order = 'YXZ';
     g.scale.setScalar(len);
     g.position.copy(randomSpot());
     g.rotation.y = Math.random() * Math.PI * 2;
     if (p.stage === 'larva') g.position.y = -0.06 * len; // すこし つちに もぐっている
+    if (p.sleeping) g.position.y = -0.3 * len;          // とうみん：つちに もぐって ねている
     g.traverse((o) => (o.userData.petId = p.id));
     scene.add(g);
     const shadow = new THREE.Mesh(new THREE.CircleGeometry(len * 0.45, 20), shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.02;
     scene.add(shadow);
-    const walker = p.stage === 'adult';
-    const speed = (p.species === 'ant' ? 5 : p.species === 'dango' ? 1.6 : 2.4) * (p.hungry ? 0.4 : 1);
+    const walker = p.stage === 'adult' && !p.sleeping;
+    const speed = (p.species === 'ant' ? 5 : p.species === 'dango' ? 1.6 : 2.4) * (p.weak ? 0.4 : 1);
     actors.set(p.id, {
       pet: p, model, g, shadow, walker, speed, len,
       target: randomSpot(), rest: Math.random() * 2, phase: Math.random() * 10, rolled: 0,
-      key: `${p.stage}/${p.lengthCm.toFixed(2)}/${p.hungry}`,
+      play: null, key: keyOf(p),
     });
   }
 
   function removeActor(id) {
     const a = actors.get(id);
     if (!a) return;
+    stopPlay(a);
     scene.remove(a.g);
     scene.remove(a.shadow);
     actors.delete(id);
@@ -338,13 +452,13 @@ export function createInsectRoom(container, { onSelect }) {
     for (const id of [...actors.keys()]) if (!ids.has(id)) removeActor(id);
     for (const p of list) {
       const a = actors.get(p.id);
-      const key = `${p.stage}/${p.lengthCm.toFixed(2)}/${p.hungry}`;
-      if (a && a.key !== key) {
+      if (a && a.key !== keyOf(p)) {
         const keep = a.g.position.clone();
         removeActor(p.id);
         addActor(p);
-        actors.get(p.id).g.position.x = keep.x;
-        actors.get(p.id).g.position.z = keep.z;
+        const b = actors.get(p.id);
+        b.g.position.x = keep.x;
+        b.g.position.z = keep.z;
       } else if (!a) {
         addActor(p);
       }
@@ -357,7 +471,7 @@ export function createInsectRoom(container, { onSelect }) {
     ring.visible = !!a;
     if (a) {
       ring.scale.setScalar(a.len * 0.7);
-      if (a.pet.species === 'dango' && a.walker) a.rolled = 3; // タップで まるくなる
+      if (a.pet.species === 'dango' && a.walker && !a.play) a.rolled = 3; // タップで まるくなる
     }
   }
 
@@ -369,7 +483,7 @@ export function createInsectRoom(container, { onSelect }) {
     if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
     const r = renderer.domElement.getBoundingClientRect();
     ray.setFromCamera(V(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1, 0), camera);
-    const hits = ray.intersectObjects([...actors.values()].map((a) => a.g), true);
+    const hits = ray.intersectObjects([...actors.values()].filter((a) => a.g.visible).map((a) => a.g), true);
     const id = hits.length ? hits[0].object.userData.petId : null;
     select(id);
     onSelect(id);
@@ -392,14 +506,108 @@ export function createInsectRoom(container, { onSelect }) {
 
   // ---------- うごき ----------
 
-  const clock = new THREE.Clock();
-  let raf = 0;
+  function animateLegs(a, dist) {
+    a.phase += (dist / a.len) * 9;
+    for (const l of a.model.legs) {
+      const s = Math.sin(a.phase + l.userData.phase);
+      l.rotation.y = s * 0.35;
+      l.rotation.z = l.userData.side * Math.max(0, Math.cos(a.phase + l.userData.phase)) * 0.25;
+    }
+  }
+
+  // p に むかって すすむ。ついたら true。のぼりは からだを かたむける
+  function moveTo(a, p, speed, dt) {
+    const g = a.g;
+    const d = new THREE.Vector3().subVectors(p, g.position);
+    const dist = d.length();
+    const v = speed * dt;
+    if (dist <= v || dist < 0.05) {
+      g.position.copy(p);
+      return true;
+    }
+    const flat = Math.hypot(d.x, d.z);
+    if (flat > 0.01) g.rotation.y = Math.atan2(d.x, d.z);
+    g.rotation.x = -Math.atan2(d.y, Math.max(flat, 0.001)) * (flat > 0.01 ? 1 : 0.9);
+    g.position.addScaledVector(d, v / dist);
+    animateLegs(a, v);
+    return false;
+  }
+
+  function stopPlay(a) {
+    if (!a.play) return;
+    a.play.decor.busy = null;
+    a.play = null;
+    a.g.visible = true;
+    a.g.rotation.x = 0;
+    a.g.rotation.z = 0;
+    a.g.position.y = 0;
+  }
+
+  // あいている おきものを えらんで あそびに いく
+  function startPlay(a) {
+    const free = decors.filter((d) => !d.busy);
+    if (!free.length || a.pet.weak) return false;
+    const decor = free[Math.floor(Math.random() * free.length)];
+    decor.busy = a.pet.id;
+    a.play = { decor, route: decor.world.slice(), idx: 0, speed: decor.speed.slice(), phase: 'go', timer: 0 };
+    return true;
+  }
+
+  function stepPlay(a, dt, t) {
+    const pl = a.play;
+    const d = pl.decor;
+    if (pl.phase === 'go' || pl.phase === 'back') {
+      const target = pl.route[pl.idx];
+      const mult = pl.speed[pl.idx] ?? 1;
+      if (moveTo(a, target, a.speed * mult, dt)) {
+        pl.idx++;
+        if (pl.idx >= pl.route.length) {
+          if (pl.phase === 'back') return stopPlay(a);
+          if (d.stay) { pl.phase = 'stay'; pl.timer = d.stay; }
+          else if (d.ride) { pl.phase = 'ride'; pl.timer = d.ride; }
+          else if (d.hide) { pl.phase = 'hide'; pl.timer = d.hide; a.g.visible = false; }
+          else stopPlay(a); // すべりだいは すべりおりたら おわり
+        }
+      }
+    } else if (pl.phase === 'stay') {
+      pl.timer -= dt;
+      a.model.legs.forEach((l) => (l.rotation.y *= 0.9));
+      if (pl.timer <= 0) goBack(a, d.world.slice().reverse(), d.speed.slice().reverse());
+    } else if (pl.phase === 'ride') {
+      pl.timer -= dt;
+      d.pivot.rotation.x = Math.sin(t * 2.4) * 0.55 * Math.min(1, pl.timer, d.ride - pl.timer);
+      d.seat.updateMatrixWorld(true);
+      a.g.position.copy(d.seat.localToWorld(V(0, 0.2, 0)));
+      a.g.rotation.x = d.pivot.rotation.x;
+      a.g.rotation.y = 0;
+      if (pl.timer <= 0) {
+        d.pivot.rotation.x = 0;
+        goBack(a, d.exitWorld, [1.5]);
+      }
+    } else if (pl.phase === 'hide') {
+      pl.timer -= dt;
+      if (pl.timer <= 0) {
+        a.g.visible = true;
+        goBack(a, d.world.slice().reverse(), d.speed.slice().reverse());
+      }
+    }
+  }
+
+  function goBack(a, route, speed) {
+    a.play.phase = 'back';
+    a.play.route = route;
+    a.play.speed = speed;
+    a.play.idx = 0;
+  }
+
   function step(a, dt, t) {
     const g = a.g;
     if (!a.walker) {
-      // ようちゅうは くねくね、さなぎは ときどき ぴくっ
+      // ようちゅうは くねくね、さなぎは ときどき ぴくっ、とうみんは じっと
       if (a.pet.stage === 'larva') g.rotation.y += Math.sin(t * 1.5 + a.phase) * 0.004;
-      else g.rotation.z = Math.sin(t * 9) * 0.03 * (Math.sin(t * 0.7 + a.phase) > 0.93 ? 1 : 0);
+      else if (a.pet.stage === 'pupa') g.rotation.z = Math.sin(t * 9) * 0.03 * (Math.sin(t * 0.7 + a.phase) > 0.93 ? 1 : 0);
+    } else if (a.play) {
+      stepPlay(a, dt, t);
     } else if (a.rolled > 0) {
       a.rolled -= dt;
       a.model.body.visible = false;
@@ -418,35 +626,36 @@ export function createInsectRoom(container, { onSelect }) {
       const dz = a.target.z - g.position.z;
       const dist = Math.hypot(dx, dz);
       if (dist < a.len * 0.5) {
-        a.target = randomSpot();
-        a.rest = Math.random() < 0.5 ? 0.5 + Math.random() * 2.5 : 0;
+        if (!(decors.length && Math.random() < 0.4 && startPlay(a))) {
+          a.target = randomSpot();
+          a.rest = Math.random() < 0.5 ? 0.5 + Math.random() * 2.5 : 0;
+        }
       } else {
         const want = Math.atan2(dx, dz);
         let diff = want - g.rotation.y;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         g.rotation.y += Math.sign(diff) * Math.min(Math.abs(diff), dt * 2.5);
+        g.rotation.x = 0;
         const v = a.speed * dt * (Math.abs(diff) > 1 ? 0.3 : 1);
         g.position.x += Math.sin(g.rotation.y) * v;
         g.position.z += Math.cos(g.rotation.y) * v;
-        a.phase += (v / a.len) * 9;
-        for (const l of a.model.legs) {
-          const s = Math.sin(a.phase + l.userData.phase);
-          l.rotation.y = s * 0.35;
-          l.rotation.z = l.userData.side * Math.max(0, Math.cos(a.phase + l.userData.phase)) * 0.25;
-        }
+        animateLegs(a, v);
       }
     }
+    a.shadow.visible = g.visible && g.position.y < 1;
     a.shadow.position.x = g.position.x;
     a.shadow.position.z = g.position.z;
   }
 
+  const clock = new THREE.Clock();
+  let raf = 0;
   function loop() {
     raf = requestAnimationFrame(loop);
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
     for (const a of actors.values()) step(a, dt, t);
     const s = selected && actors.get(selected);
-    if (s) ring.position.set(s.g.position.x, 0.04, s.g.position.z);
+    if (s) ring.position.set(s.g.position.x, Math.max(0.04, s.g.position.y), s.g.position.z);
     controls.update();
     renderer.render(scene, camera);
   }
@@ -460,5 +669,20 @@ export function createInsectRoom(container, { onSelect }) {
     renderer.domElement.remove();
   }
 
-  return { setCase, setPets, select, dispose };
+  // たしかめ よう：いま なにを しているか
+  const debug = () => [...actors.values()].map((a) => ({
+    id: a.pet.id, play: a.play ? `${a.play.decor.type}:${a.play.phase}` : null,
+    y: Math.round(a.g.position.y * 10) / 10, visible: a.g.visible,
+  }));
+
+  // たしかめ よう：がめんが かくれていても じかんを すすめる
+  let fakeT = 0;
+  const advance = (seconds) => {
+    for (let i = 0; i < seconds / 0.05; i++) {
+      fakeT += 0.05;
+      for (const a of actors.values()) step(a, 0.05, fakeT);
+    }
+  };
+
+  return { setCase, setPets, select, dispose, debug, advance };
 }

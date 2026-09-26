@@ -1,35 +1,84 @@
-// むしの おへや：べんきょうで ためた ポイントで むし・ケース・えさを かって そだてる。
-//   ・えさ：1ぴき 1にち 1こ。むしが ふえるほど ポイントが いる（さなぎは たべない）
+// むしの おへや：べんきょうで ためた ポイントで むし・ケース・えさ・おきものを かって そだてる。
+//   ・えさ：1ぴき 1にち 1こ。むしが ふえるほど ポイントが いる（さなぎ・とうみんちゅうは たべない）
+//   ・5にち えさを もらえないと よわって しんでしまう（2にちめから「よわっている」と でる）
 //   ・そだつ：ようちゅう → さなぎ → せいちゅう。「べんきょうした ひ」（1セット いじょう おわった ひ）で すすむ
 //   ・おおきさ：ようちゅうの あいだに きんしエキス・ロイヤルゼリーを あげると おおきく なる
-//   ・えさを わすれても しなない（げんきが なくなる だけ）
+//   ・じゅみょう：せいちゅうに なってから（カブトムシ 3かげつ、クワガタ 2ねん など）
+//   ・とうみん：クワガタの せいちゅうは 12がつ15にち 〜 よくとしの 6がつ1にち まで ねている
 //
 // ほぞん（localStorage: mathapp.v1.pets.<こどもの id>）
-//   cases [{ id, type }]
-//   pets  [{ id, species, caseId, stage, stageStart, growth, size, lastFed, fed: { day, kinds } }]
-//   inv   { jelly, leaf, mat, kinshi, royal }
+//   cases  [{ id, type, decor: [{ type, slot }] }]
+//   pets   [{ id, species, caseId, stage, stageStart, growth, size, adultSince, fedDays: [ひづけ], starve, fed: { day, kinds } }]
+//   inv    { jelly, leaf, mat, kinshi, royal }
+//   simDay さいごに 1にちぶん たしかめおわった ひ（はらぺこ・じゅみょう）
+//   zukan  { しゅるい: { count, raised, maxSize, first } }
+//   graves [{ species, size, stage, cause, date, days }]
 
 const petsKey = (id) => `mathapp.v1.pets.${id}`;
 
-// dims：よこ・おくゆき・たかさ（cm）
+// dims：よこ・おくゆき・たかさ（cm）、slots：おきものを おける かず
 const CASES = {
-  starter: { name: 'はじめの ケース', price: 0, size: 0, capacity: 6, dims: [24, 16, 14] },
-  S: { name: 'しいくケース（小）', price: 200, size: 1, capacity: 3, dims: [32, 20, 20] },
-  M: { name: 'しいくケース（中）', price: 400, size: 2, capacity: 4, dims: [42, 26, 26] },
-  L: { name: 'しいくケース（大）', price: 800, size: 3, capacity: 5, dims: [56, 32, 32] },
+  starter: { name: 'はじめの ケース', price: 0, size: 0, capacity: 6, slots: 2, dims: [24, 16, 14] },
+  S: { name: 'しいくケース（小）', price: 200, size: 1, capacity: 3, slots: 2, dims: [32, 20, 20] },
+  M: { name: 'しいくケース（中）', price: 400, size: 2, capacity: 4, slots: 3, dims: [42, 26, 26] },
+  L: { name: 'しいくケース（大）', price: 800, size: 3, capacity: 5, slots: 4, dims: [56, 32, 32] },
 };
 
+const STARVE_DAYS = 5;
+const WAKE = { month: 6, day: 1 };    // とうみんから おきる ひ
+const SLEEP = { month: 12, day: 15 }; // とうみんを はじめる ひ
+
 // larva / pupa：ようちゅう・さなぎで すごす「べんきょうした ひ」の かず
-// size：せいちゅうの おおきさ（mm）の はんい。caseSize：ひつような ケース
+// size：せいちゅうの おおきさ（mm）、life：せいちゅうの じゅみょう（にち）、caseSize：ひつような ケース
 const SPECIES = {
-  ant: { name: 'アリ', icon: '🐜', price: 20, caseSize: 0, food: 'jelly', size: [8, 8] },
-  dango: { name: 'ダンゴムシ', icon: '🪨', price: 40, caseSize: 0, food: 'leaf', size: [12, 12] },
-  kanabun: { name: 'カナブン', icon: '🪲', price: 100, caseSize: 1, larva: 5, pupa: 2, size: [22, 30] },
-  kokuwa: { name: 'コクワガタ', icon: '🪲', price: 150, caseSize: 1, larva: 6, pupa: 2, size: [20, 54] },
-  nokogiri: { name: 'ノコギリクワガタ', icon: '🪲', price: 300, caseSize: 2, larva: 8, pupa: 3, size: [26, 75] },
-  kabuto: { name: 'カブトムシ', icon: '🪲', price: 300, caseSize: 2, larva: 8, pupa: 3, size: [32, 85] },
-  miyama: { name: 'ミヤマクワガタ', icon: '🪲', price: 600, caseSize: 3, larva: 10, pupa: 3, size: [32, 79] },
-  ookuwa: { name: 'オオクワガタ', icon: '🪲', price: 1000, caseSize: 3, larva: 12, pupa: 4, size: [30, 80] },
+  ant: {
+    name: 'アリ', icon: '🐜', price: 20, caseSize: 0, food: 'jelly', size: [8, 8], life: 365,
+    lives: 'じめんの した（す）', eats: 'あまい みつ、ちいさな むし',
+    text: 'じめんの したに すを つくり、じょおうアリを ちゅうしんに おおぜいで くらしています。はたらきアリは みんな メスです。',
+    trivia: 'えさを みつけると においの みちしるべを つけて、なかまに ばしょを おしえます。',
+  },
+  dango: {
+    name: 'ダンゴムシ', icon: '🪨', price: 40, caseSize: 0, food: 'leaf', size: [12, 12], life: 730,
+    lives: 'おちばや いしの した', eats: 'おちば',
+    text: 'さわると まるく なって みを まもります。じつは こんちゅうでは なく、エビや カニの なかまです。あしは 14ほん あります。',
+    trivia: 'おちばを たべて、ふんが つちに かえります。もりの おそうじやさんです。',
+  },
+  kanabun: {
+    name: 'カナブン', icon: '🪲', price: 100, caseSize: 1, larva: 5, pupa: 2, size: [22, 30], life: 60,
+    lives: 'ぞうきばやし', eats: 'きの しる（じゅえき）、くだもの',
+    text: 'なつに クヌギなどの じゅえきに あつまる、みどりや ちゃいろに ひかる こうちゅうです。',
+    trivia: 'かたい はねを とじた まま、すきまから うしろばねを だして とぶことが できます。',
+  },
+  kokuwa: {
+    name: 'コクワガタ', icon: '🪲', price: 150, caseSize: 1, larva: 6, pupa: 2, size: [20, 54], life: 730, kuwagata: true,
+    lives: 'にほんじゅうの ぞうきばやし', eats: 'じゅえき',
+    text: 'にほんで いちばん よく みつかる、こがたの クワガタです。',
+    trivia: 'せいちゅうで ふゆを こして、なんねんも いきることが あります。',
+  },
+  nokogiri: {
+    name: 'ノコギリクワガタ', icon: '🪲', price: 300, caseSize: 2, larva: 8, pupa: 3, size: [26, 75], life: 730, kuwagata: true,
+    lives: 'ひくい やまや ぞうきばやし', eats: 'じゅえき',
+    text: 'おおあごの うちがわが ノコギリの ように ギザギザしています。',
+    trivia: 'おおきな オスほど、おおあごが おおきく まがります。',
+  },
+  kabuto: {
+    name: 'カブトムシ', icon: '🪲', price: 300, caseSize: 2, larva: 8, pupa: 3, size: [32, 85], life: 90,
+    lives: 'ぞうきばやし', eats: 'じゅえき（ようちゅうは ふようど）',
+    text: 'にほんで にんきの おおきな こうちゅう。オスの りっぱな つのは、けんかの ときに あいてを もちあげて なげとばすのに つかいます。',
+    trivia: 'ようちゅうは くさった はっぱや きが まざった つち（ふようど）を たべて おおきく なります。',
+  },
+  miyama: {
+    name: 'ミヤマクワガタ', icon: '🪲', price: 600, caseSize: 3, larva: 10, pupa: 3, size: [32, 79], life: 730, kuwagata: true,
+    lives: 'やまの すずしい もり', eats: 'じゅえき',
+    text: 'あたまの よこに「みみ」の ような でっぱりが ある クワガタです。',
+    trivia: 'からだに こまかい きんいろの けが はえています。あつさが にがてです。',
+  },
+  ookuwa: {
+    name: 'オオクワガタ', icon: '🪲', price: 1000, caseSize: 3, larva: 12, pupa: 4, size: [30, 80], life: 730, kuwagata: true,
+    lives: 'ふるい きが おおい ぞうきばやし', eats: 'じゅえき',
+    text: 'くろく ひかる、ふとい おおあごの クワガタ。「くろい ダイヤ」と よばれる ことも あります。',
+    trivia: 'しぜんの なかでは かずが すくなく、みつけるのが とても むずかしい クワガタです。',
+  },
 };
 
 // boost：ようちゅうに あげると そだちが ふえる（1にち 1かいずつ）
@@ -40,6 +89,15 @@ const FOODS = {
   kinshi: { name: 'きんしエキス', short: 'きんし', icon: '🍄', price: 15, for: 'ようちゅうが おおきく そだつ', boost: 2 },
   royal: { name: 'ロイヤルゼリー', short: 'ロイヤル', icon: '👑', price: 30, for: 'ようちゅうが もっと おおきく そだつ', boost: 4 },
 };
+
+// おきもの：むしが あそびに いく（うごきは pet3d.js）
+const DECORS = {
+  perch: { name: 'とまりぎ', icon: '🌿', price: 60, desc: 'てっぺんまで のぼって ひとやすみ' },
+  slide: { name: 'すべりだい', icon: '🛝', price: 150, desc: 'はしごを のぼって すべりおりる' },
+  swing: { name: 'ブランコ', icon: '🎠', price: 200, desc: 'のって ゆらゆら' },
+  house: { name: 'きのこの おうち', icon: '🍄', price: 250, desc: 'なかに はいって かくれんぼ' },
+};
+
 const GROWTH_MAX_PER_DAY = 7; // マット 1 ＋ きんし 2 ＋ ロイヤル 4
 const STAGE_NAMES = { larva: 'ようちゅう', pupa: 'さなぎ', adult: 'せいちゅう' };
 
@@ -47,29 +105,93 @@ const pets = {
   data: null,
   caseId: null,
   selected: null,
-  room: null,        // 3D（よみこめなければ null）
-  roomLoading: false,
+  room: null, // 3D（よみこめなければ null）
   shopTab: 'bug',
 };
+
+// ---------- ひづけ ----------
+
+function nextDay(key) {
+  const d = new Date(`${key}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return todayKey(d);
+}
+
+function daysBetween(a, b) {
+  return Math.round((new Date(`${b}T00:00:00`) - new Date(`${a}T00:00:00`)) / 86400000);
+}
+
+function isWinter(key) {
+  const [, m, d] = key.split('-').map(Number);
+  const md = m * 100 + d;
+  return md >= SLEEP.month * 100 + SLEEP.day || md < WAKE.month * 100 + WAKE.day;
+}
+
+// クワガタの せいちゅうは ふゆの あいだ ねむる
+const isSleeping = (p, key = todayKey()) => !!SPECIES[p.species].kuwagata && p.stage === 'adult' && isWinter(key);
 
 // ---------- データ ----------
 
 function loadPetData(profileId) {
   const s = readJSON(petsKey(profileId), null);
-  if (s) return s;
+  if (s) return migrate(s);
   // はじめて：ケースと アリ 1ぴき と ゼリー 3こ を プレゼント
   const today = todayKey();
-  return {
+  const data = {
     seq: 1,
-    cases: [{ id: 'c1', type: 'starter' }],
-    pets: [{ id: 'pet1', species: 'ant', caseId: 'c1', stage: 'adult', stageStart: today, growth: 0, size: 8, lastFed: null, fed: null }],
+    cases: [{ id: 'c1', type: 'starter', decor: [] }],
+    pets: [newPet('pet1', 'ant', 'c1', today)],
     inv: { jelly: 3, leaf: 0, mat: 0, kinshi: 0, royal: 0 },
+    simDay: dayBefore(today),
+    zukan: {},
+    graves: [],
     welcome: true,
+  };
+  noteOwned(data, 'ant', today);
+  noteAdult(data, data.pets[0], false);
+  return data;
+}
+
+// まえの バージョンの データを いまの かたちに
+function migrate(s) {
+  s.zukan = s.zukan || {};
+  s.graves = s.graves || [];
+  s.simDay = s.simDay || dayBefore(todayKey());
+  for (const c of s.cases) c.decor = c.decor || [];
+  for (const p of s.pets) {
+    if (!p.fedDays) p.fedDays = p.lastFed ? [p.lastFed] : [];
+    if (p.starve === undefined) p.starve = 0;
+    if (p.stage === 'adult' && !p.adultSince) p.adultSince = p.stageStart;
+    if (!s.zukan[p.species]) noteOwned(s, p.species, p.stageStart);
+    if (p.stage === 'adult') noteAdult(s, p, false);
+    delete p.lastFed;
+  }
+  return s;
+}
+
+function newPet(id, species, caseId, today) {
+  const sp = SPECIES[species];
+  return {
+    id, species, caseId, stage: sp.larva ? 'larva' : 'adult', stageStart: today,
+    growth: 0, size: sp.larva ? null : sp.size[0], adultSince: sp.larva ? null : today,
+    fedDays: [], starve: 0, fed: null,
   };
 }
 
 function savePetData() {
   writeJSON(petsKey(currentProfile().id), pets.data);
+}
+
+// ずかんに きろく
+function noteOwned(data, species, day) {
+  const z = data.zukan[species] || (data.zukan[species] = { count: 0, raised: 0, maxSize: 0, first: day });
+  z.count++;
+}
+
+function noteAdult(data, p, raised) {
+  const z = data.zukan[p.species];
+  if (raised) z.raised++;
+  z.maxSize = Math.max(z.maxSize || 0, p.size || 0);
 }
 
 // 1セット いじょう おわった ひ（ふるい じゅん）
@@ -94,10 +216,14 @@ function processGrowth(data, days) {
         p.stage = 'pupa';
         p.stageStart = after[sp.larva - 1];
         p.size = sizeFromGrowth(sp, p.growth);
+        p.starve = 0;
         events.push(`${sp.name}が さなぎに なった！`);
       } else if (p.stage === 'pupa' && after.length >= sp.pupa) {
         p.stage = 'adult';
         p.stageStart = after[sp.pupa - 1];
+        p.adultSince = p.stageStart;
+        p.starve = 0;
+        noteAdult(data, p, true);
         events.push(`${sp.name}が せいちゅうに なった！ おおきさ ${p.size}mm`);
       } else break;
     }
@@ -105,8 +231,41 @@ function processGrowth(data, days) {
   return events;
 }
 
+function die(data, p, cause, day) {
+  const sp = SPECIES[p.species];
+  data.pets = data.pets.filter((x) => x.id !== p.id);
+  data.graves.push({
+    species: p.species, size: p.size, stage: p.stage, cause, date: day,
+    days: p.adultSince ? daysBetween(p.adultSince, day) : 0,
+  });
+  return cause === 'old'
+    ? `${sp.name}は じゅみょうを まっとうしました。たくさん いきたね。ありがとう 🌸`
+    : `${sp.name}は えさを ${STARVE_DAYS}にち もらえなくて、よわって しんでしまいました…`;
+}
+
+// きのう までの 1にち ずつを たしかめる：えさを もらえなかった ひ・じゅみょう
+function simulateDays(data) {
+  const today = todayKey();
+  const events = [];
+  for (let d = nextDay(data.simDay); d < today; d = nextDay(d)) {
+    for (const p of [...data.pets]) {
+      if (p.stageStart > d) continue; // まだ いなかった
+      if (p.stage === 'adult' && p.adultSince && daysBetween(p.adultSince, d) >= SPECIES[p.species].life) {
+        events.push(die(data, p, 'old', d));
+        continue;
+      }
+      if (p.stage === 'pupa' || isSleeping(p, d)) continue;
+      if (p.fedDays.includes(d)) p.starve = 0;
+      else p.starve++;
+      if (p.starve >= STARVE_DAYS) events.push(die(data, p, 'hunger', d));
+    }
+  }
+  data.simDay = dayBefore(today);
+  return events;
+}
+
 function foodFor(p) {
-  if (p.stage === 'pupa') return null;
+  if (p.stage === 'pupa' || isSleeping(p)) return null;
   if (p.stage === 'larva') return 'mat';
   return SPECIES[p.species].food || 'jelly';
 }
@@ -118,7 +277,8 @@ function markFed(p, kind) {
   if (!p.fed || p.fed.day !== today) p.fed = { day: today, kinds: [] };
   p.fed.kinds.push(kind);
   if (kind === foodFor(p)) {
-    p.lastFed = today;
+    if (!p.fedDays.includes(today)) p.fedDays = [...p.fedDays, today].slice(-14);
+    p.starve = 0;
     if (p.stage === 'larva') p.growth += 1;
   } else if (FOODS[kind].boost) {
     p.growth += FOODS[kind].boost;
@@ -126,13 +286,17 @@ function markFed(p, kind) {
 }
 
 function moodOf(p) {
-  if (p.stage === 'pupa') return { text: 'じっと している', hungry: false };
-  const today = todayKey();
-  if (fedToday(p, foodFor(p))) return { text: 'げんき いっぱい 😊', hungry: false };
-  if (p.lastFed === dayBefore(today) || p.stageStart === today || (!p.lastFed && p.stageStart === dayBefore(today))) {
-    return { text: 'おなかが すいた 🍽️', hungry: false };
+  if (p.stage === 'pupa') return { text: 'じっと している', weak: false };
+  if (isSleeping(p)) return { text: `とうみん ちゅう 💤（${WAKE.month}がつ${WAKE.day}にちに おきるよ）`, weak: false, sleeping: true };
+  if (fedToday(p, foodFor(p))) return { text: 'げんき いっぱい 😊', weak: false };
+  if (p.starve >= 2) {
+    const left = STARVE_DAYS - p.starve;
+    return {
+      text: left <= 1 ? '⚠️ よわっている！ きょう えさを あげないと しんでしまう！' : `⚠️ よわっている！ あと ${left}にち えさを あげないと しんでしまう`,
+      weak: true, danger: true,
+    };
   }
-  return { text: 'げんきが ない… えさを あげてね', hungry: true };
+  return { text: p.starve === 1 ? 'おなか ぺこぺこ 🍽️' : 'おなかが すいた 🍽️', weak: false };
 }
 
 // 3D に わたす かたち
@@ -150,7 +314,8 @@ function view3d(p) {
   }
   // ちいさい むしも みえる ように すこし おおきめに かく
   const lengthCm = Math.max(2.2, Math.min(12, (mm / 10) * 1.3));
-  return { id: p.id, species: p.species, stage: p.stage, lengthCm, sizeRatio, hungry: moodOf(p).hungry };
+  const mood = moodOf(p);
+  return { id: p.id, species: p.species, stage: p.stage, lengthCm, sizeRatio, weak: mood.weak, sleeping: !!mood.sleeping };
 }
 
 // ---------- がめん ----------
@@ -158,7 +323,7 @@ function view3d(p) {
 function openPets() {
   const profile = currentProfile();
   pets.data = loadPetData(profile.id);
-  const events = processGrowth(pets.data, studyDayList(profile.id));
+  const events = [...processGrowth(pets.data, studyDayList(profile.id)), ...simulateDays(pets.data)];
   savePetData();
   if (!pets.data.cases.some((c) => c.id === pets.caseId)) pets.caseId = pets.data.cases[0].id;
   pets.selected = null;
@@ -169,9 +334,9 @@ function openPets() {
   if (pets.data.welcome) {
     pets.data.welcome = false;
     savePetData();
-    toast('ようこそ！ アリを 1ぴき と ゼリーを プレゼント 🎁');
+    notice('ようこそ！ アリを 1ぴき と ゼリーを 3こ プレゼント 🎁<br>まいにち えさを あげてね');
   } else if (events.length) {
-    toast(events.join('<br>'));
+    notice(events.join('<br><br>'));
   }
 }
 
@@ -197,7 +362,7 @@ async function mountRoom() {
       },
     });
     $('room-msg').style.display = 'none';
-    syncRoom();
+    syncRoom(true);
   } catch (e) {
     $('room-msg').textContent = '3D を よみこめませんでした。インターネットに つないで ひらきなおしてね';
   }
@@ -209,11 +374,20 @@ function currentCase() {
 
 const petsIn = (caseId) => pets.data.pets.filter((p) => p.caseId === caseId);
 
-function syncRoom() {
+// rebuild：ケース（おきもの）も つくりなおす
+function syncRoom(rebuild) {
   if (!pets.room) return;
-  pets.room.setCase(CASES[currentCase().type].dims);
+  const c = currentCase();
+  if (rebuild) pets.room.setCase(CASES[c.type].dims, c.decor, CASES[c.type].slots);
   pets.room.setPets(petsIn(pets.caseId).map(view3d));
   pets.room.select(pets.selected);
+}
+
+function switchCase(id) {
+  pets.caseId = id;
+  pets.selected = null;
+  renderPets();
+  syncRoom(true);
 }
 
 function renderPets() {
@@ -223,14 +397,10 @@ function renderPets() {
   for (const c of pets.data.cases) {
     const def = CASES[c.type];
     const b = document.createElement('button');
-    b.className = 'case-tab' + (c.id === pets.caseId ? ' active' : '');
-    b.textContent = `${def.name}（${petsIn(c.id).length}/${def.capacity}）`;
-    b.addEventListener('click', () => {
-      pets.caseId = c.id;
-      pets.selected = null;
-      renderPets();
-      syncRoom();
-    });
+    const danger = petsIn(c.id).some((p) => moodOf(p).danger);
+    b.className = 'case-tab' + (c.id === pets.caseId ? ' active' : '') + (danger ? ' danger' : '');
+    b.textContent = `${danger ? '⚠️ ' : ''}${def.name}（${petsIn(c.id).length}/${def.capacity}）`;
+    b.addEventListener('click', () => switchCase(c.id));
     tabs.appendChild(b);
   }
   const inv = pets.data.inv;
@@ -243,15 +413,19 @@ function renderPetInfo() {
   const el = $('pet-info');
   const p = pets.data.pets.find((x) => x.id === pets.selected);
   if (!p) {
+    const c = currentCase();
     const list = petsIn(pets.caseId);
     const needs = list.filter((x) => foodFor(x) && !fedToday(x, foodFor(x))).length;
+    const decor = c.decor.map((d) => `${DECORS[d.type].icon} ${DECORS[d.type].name}`).join('、');
     el.innerHTML = `
-      <div class="info-title">${CASES[currentCase().type].name}</div>
+      <div class="info-title">${CASES[c.type].name}</div>
       <div class="info-sub">${list.length ? 'むしを タップすると くわしく みられるよ' : 'まだ むしが いないよ。おみせで かおう'}</div>
       <ul class="case-list">${list.map((x) => {
         const sp = SPECIES[x.species];
-        return `<li data-id="${x.id}">${sp.icon} ${sp.name} <small>${STAGE_NAMES[x.stage]}</small></li>`;
+        const m = moodOf(x);
+        return `<li data-id="${x.id}" class="${m.danger ? 'danger' : ''}">${sp.icon} ${sp.name} <small>${m.sleeping ? '💤' : STAGE_NAMES[x.stage]}</small></li>`;
       }).join('')}</ul>
+      <div class="info-sub">おきもの：${decor || 'なし'}（${c.decor.length}/${CASES[c.type].slots}）</div>
       <div class="info-need">${needs ? `きょう えさが ほしい むし：${needs}ひき` : list.length ? 'きょうの えさは ばっちり！' : ''}</div>`;
     el.querySelectorAll('li[data-id]').forEach((li) => li.addEventListener('click', () => {
       pets.selected = li.dataset.id;
@@ -278,6 +452,9 @@ function renderPetInfo() {
   } else {
     growth += `<div>おおきさ：<b>${p.size}</b>mm${sp.size[1] > sp.size[0] ? `（${sp.size[0]}〜${sp.size[1]}mm）` : ''}</div>`;
   }
+  if (p.stage === 'adult' && p.adultSince) {
+    growth += `<div>せいちゅうに なって ${daysBetween(p.adultSince, todayKey())}にち（じゅみょう やく ${lifeText(sp.life)}）</div>`;
+  }
   const specials = p.stage === 'larva'
     ? ['kinshi', 'royal'].map((k) => {
       const f = FOODS[k];
@@ -289,7 +466,7 @@ function renderPetInfo() {
     : '';
   el.innerHTML = `
     <div class="info-title">${sp.name} <small>${STAGE_NAMES[p.stage]}</small></div>
-    <div class="info-mood">${mood.text}</div>
+    <div class="info-mood${mood.danger ? ' danger' : ''}">${mood.text}</div>
     <div class="info-growth">${growth}</div>
     ${specials}
     <button class="small-btn info-back">← ケースの いちらん</button>`;
@@ -307,6 +484,11 @@ function renderPetInfo() {
     if (pets.room) pets.room.select(null);
     renderPetInfo();
   });
+}
+
+function lifeText(days) {
+  if (days >= 365) return `${Math.round(days / 365)}ねん`;
+  return `${Math.round(days / 30)}かげつ`;
 }
 
 // ケースの むし ぜんぶに まいにちの えさを あげる
@@ -340,6 +522,12 @@ function toast(html) {
   t.classList.add('show');
 }
 
+// だいじな おしらせ（そだった・しんでしまった）は とじるまで だす
+function notice(html) {
+  $('notice-text').innerHTML = html;
+  $('notice').classList.remove('hidden');
+}
+
 // ---------- おみせ ----------
 
 function openShop(tab) {
@@ -365,6 +553,16 @@ function openShop(tab) {
       if (!c.price) continue;
       const names = Object.values(SPECIES).filter((s) => s.caseSize === c.size).map((s) => s.name).join('・');
       rows.push(shopRow({ icon: '🏠', name: c.name, price: c.price, points, desc: `${c.capacity}ひき まで。${names} が かえる`, action: `case:${k}` }));
+    }
+  } else if (pets.shopTab === 'decor') {
+    const c = currentCase();
+    const full = c.decor.length >= CASES[c.type].slots;
+    for (const [k, d] of Object.entries(DECORS)) {
+      rows.push(shopRow({
+        icon: d.icon, name: d.name, price: d.price, points, locked: full,
+        desc: full ? `🔒 ${CASES[c.type].name}には もう おけない` : `${d.desc}（${CASES[c.type].name}に おくよ）`,
+        action: `decor:${k}`,
+      }));
     }
   } else {
     for (const [k, f] of Object.entries(FOODS)) {
@@ -404,13 +602,27 @@ function buy(action) {
     confirmDialog(`${c.name}を ${c.price}pt で かう？`, () => {
       if (!spendPoints(c.price, `case:${key}`)) return;
       const id = `c${++pets.data.seq}`;
-      pets.data.cases.push({ id, type: key });
-      pets.caseId = id;
+      pets.data.cases.push({ id, type: key, decor: [] });
+      savePetData();
+      closeShop();
+      switchCase(id);
+      toast(`${c.name}が とどいた！`);
+    });
+    return;
+  }
+  if (kind === 'decor') {
+    const d = DECORS[key];
+    const c = currentCase();
+    confirmDialog(`${d.name}を ${d.price}pt で かう？`, () => {
+      const used = new Set(c.decor.map((x) => x.slot));
+      const slot = [...Array(CASES[c.type].slots).keys()].find((i) => !used.has(i));
+      if (slot === undefined || !spendPoints(d.price, `decor:${key}`)) return;
+      c.decor.push({ type: key, slot });
       savePetData();
       closeShop();
       renderPets();
-      syncRoom();
-      toast(`${c.name}が とどいた！`);
+      syncRoom(true);
+      toast(`${d.name}を おいたよ！ むしが あそびに くるかな`);
     });
     return;
   }
@@ -426,16 +638,15 @@ function buy(action) {
     if (!spendPoints(sp.price, `bug:${key}`)) return;
     const today = todayKey();
     const id = `pet${++pets.data.seq}`;
-    pets.data.pets.push({
-      id, species: key, caseId: target.id, stage: sp.larva ? 'larva' : 'adult', stageStart: today,
-      growth: 0, size: sp.larva ? null : sp.size[0], lastFed: null, fed: null,
-    });
-    pets.caseId = target.id;
-    pets.selected = id;
+    pets.data.pets.push(newPet(id, key, target.id, today));
+    noteOwned(pets.data, key, today);
+    if (!sp.larva) noteAdult(pets.data, pets.data.pets[pets.data.pets.length - 1], false);
     savePetData();
     closeShop();
+    pets.caseId = target.id;
+    pets.selected = id;
     renderPets();
-    syncRoom();
+    syncRoom(true);
     toast(`${sp.name}が きた！ ${CASES[target.type].name}に いるよ`);
   });
 }
@@ -454,8 +665,71 @@ function confirmDialog(text, onYes) {
   $('confirm-no').onclick = () => $('confirm').classList.add('hidden');
 }
 
+// ---------- ずかん ----------
+
+function openZukan() {
+  const z = pets.data.zukan;
+  const grid = $('zukan-grid');
+  grid.innerHTML = '';
+  for (const [k, sp] of Object.entries(SPECIES)) {
+    const rec = z[k];
+    const b = document.createElement('button');
+    b.className = 'zukan-card' + (rec ? '' : ' unknown');
+    b.innerHTML = rec
+      ? `<span class="z-icon">${sp.icon}</span><span class="z-name">${sp.name}</span>
+         <span class="z-rec">${rec.maxSize ? `さいだい ${rec.maxSize}mm` : 'まだ ようちゅう'}</span>`
+      : '<span class="z-icon">❔</span><span class="z-name">？？？</span><span class="z-rec">まだ かったことが ない</span>';
+    b.addEventListener('click', () => showZukanDetail(k));
+    grid.appendChild(b);
+  }
+  const found = Object.keys(z).length;
+  $('zukan-count').textContent = `${found} / ${Object.keys(SPECIES).length} しゅるい`;
+  showZukanDetail(null);
+  $('zukan').classList.remove('hidden');
+}
+
+function showZukanDetail(k) {
+  const el = $('zukan-detail');
+  if (!k) {
+    const graves = pets.data.graves.slice().reverse();
+    el.innerHTML = `<div class="info-title">🌸 おもいで</div>
+      ${graves.length ? `<ul class="graves">${graves.map((g) => {
+        const sp = SPECIES[g.species];
+        return `<li>${sp.icon} ${sp.name}${g.size && g.stage === 'adult' ? ` ${g.size}mm` : ''}
+          <small>${g.date.slice(5).replace('-', '/')}・${g.cause === 'old' ? 'じゅみょう' : 'えさが なくて'}</small></li>`;
+      }).join('')}</ul>` : '<div class="info-sub">しゅるいを タップすると せつめいが みられるよ</div>'}`;
+    return;
+  }
+  const sp = SPECIES[k];
+  const rec = pets.data.zukan[k];
+  if (!rec) {
+    el.innerHTML = `<div class="info-title">？？？</div><div class="info-sub">おみせで かうと わかるよ。${sp.price}pt</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="info-title">${sp.icon} ${sp.name}</div>
+    <div class="z-stats">
+      <span>さいだい <b>${rec.maxSize || '—'}</b>mm</span>
+      <span>かった かず <b>${rec.count}</b></span>
+      ${sp.larva ? `<span>せいちゅうまで そだてた <b>${rec.raised}</b></span>` : ''}
+    </div>
+    <p>${sp.text}</p>
+    <dl class="z-facts">
+      <dt>おおきさ</dt><dd>${sp.size[0] === sp.size[1] ? `やく ${sp.size[0]}mm` : `${sp.size[0]}〜${sp.size[1]}mm`}</dd>
+      <dt>すんでいる ところ</dt><dd>${sp.lives}</dd>
+      <dt>たべもの</dt><dd>${sp.eats}</dd>
+      <dt>まめちしき</dt><dd>${sp.trivia}</dd>
+      <dt>この アプリでは</dt><dd>せいちゅうの じゅみょう やく ${lifeText(sp.life)}${sp.kuwagata ? `。${SLEEP.month}がつ${SLEEP.day}にち〜${WAKE.month}がつ${WAKE.day}にちは とうみん` : ''}</dd>
+    </dl>
+    <button class="small-btn" id="zukan-back">← おもいで</button>`;
+  $('zukan-back').addEventListener('click', () => showZukanDetail(null));
+}
+
 $('pets-back').addEventListener('click', closePets);
 $('feed-btn').addEventListener('click', feedCase);
 $('shop-btn').addEventListener('click', () => openShop());
+$('zukan-btn').addEventListener('click', openZukan);
+$('zukan-close').addEventListener('click', () => $('zukan').classList.add('hidden'));
 $('shop-close').addEventListener('click', closeShop);
+$('notice-ok').addEventListener('click', () => $('notice').classList.add('hidden'));
 document.querySelectorAll('.shop-tab').forEach((b) => b.addEventListener('click', () => openShop(b.dataset.tab)));
