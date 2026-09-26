@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v6';
+const VERSION = 'v7';
 const FILES = [
   './',
   'index.html',
@@ -11,6 +11,8 @@ const FILES = [
   'placevalue.js',
   'app.js',
   'timeattack.js',
+  'pets.js',
+  'pet3d.js',
   'manifest.json',
   'icons/icon-192.png',
   'icons/icon-512.png',

@@ -155,8 +155,10 @@ function renderHomeBar() {
       ${s.day.goal ? '<b>たっせい！</b>' : `あと ${goal - s.day.sets} セット`}
       ${s.streak >= 2 ? `<span class="streak">🔥 ${s.streak}にち れんぞく</span>` : ''}
     </div>
-    <div class="points-chip">⭐ <b>${s.points}</b> pt</div>`;
+    <div class="points-chip">⭐ <b>${s.points}</b> pt</div>
+    <button id="pets-btn" class="pets-btn">🐜 むしの おへや</button>`;
   $('who-btn').addEventListener('click', renderWho);
+  $('pets-btn').addEventListener('click', openPets);
 }
 
 // けっか がめんの ポイント

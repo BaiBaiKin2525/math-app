@@ -12,6 +12,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="さんすう">
   <link rel="stylesheet" href="style.css">
+  <!-- むしの おへやの 3D（three.js）。はじめて ひらいた ときに よみこみ、あとは オフラインでも うごく -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
   <!-- だれが やる？ -->
@@ -75,6 +84,54 @@
     </div>
   </section>
 
+  <!-- むしの おへや -->
+  <section id="pets" class="screen">
+    <header class="quiz-bar">
+      <button id="pets-back" class="small-btn">← もどる</button>
+      <div class="pets-title">🐜 <span id="pets-who"></span> の むしの おへや</div>
+      <div id="pets-points" class="points-chip"></div>
+    </header>
+    <div id="case-tabs" class="case-tabs"></div>
+    <div class="pets-body">
+      <div id="room3d" class="room3d"><div id="room-msg" class="room-msg"></div></div>
+      <div class="pets-side">
+        <div id="pet-info" class="pet-info"></div>
+        <div class="pets-actions">
+          <button id="feed-btn" class="big-btn orange">🍯 えさを あげる</button>
+          <button id="shop-btn" class="big-btn blue">🛒 おみせ</button>
+        </div>
+        <div id="inventory" class="inventory"></div>
+      </div>
+    </div>
+    <div id="toast" class="toast"></div>
+  </section>
+
+  <div id="shop" class="overlay hidden">
+    <div class="sheet">
+      <div class="sheet-head">
+        <b>🛒 おみせ</b>
+        <span id="shop-points" class="points-chip"></span>
+        <button id="shop-close" class="small-btn">とじる</button>
+      </div>
+      <div class="shop-tabs">
+        <button class="shop-tab" data-tab="bug">むし</button>
+        <button class="shop-tab" data-tab="case">ケース</button>
+        <button class="shop-tab" data-tab="food">えさ</button>
+      </div>
+      <div id="shop-list" class="shop-list"></div>
+    </div>
+  </div>
+
+  <div id="confirm" class="overlay hidden">
+    <div class="dialog">
+      <div id="confirm-text" class="dialog-text"></div>
+      <div class="dialog-buttons">
+        <button id="confirm-no" class="big-btn gray">やめる</button>
+        <button id="confirm-yes" class="big-btn orange">かう！</button>
+      </div>
+    </div>
+  </div>
+
   <!-- けっか -->
   <section id="result" class="screen">
     <div id="result-mark" class="result-mark"></div>
@@ -96,5 +153,6 @@
   <script src="placevalue.js"></script>
   <script src="app.js"></script>
   <script src="timeattack.js"></script>
+  <script src="pets.js"></script>
 </body>
 </html>
