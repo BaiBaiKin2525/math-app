@@ -187,23 +187,33 @@ function buildPupa(species) {
 
 // ---------- ケース ----------
 
+// つちの あつさ（cm）。ようちゅう・さなぎは つちの なかの ガラスぎわに いて、よこから みえる
+export const SOIL = 9;
+
 function buildCase(dims) {
   const [w, d, h] = dims;
   const g = new THREE.Group();
   const table = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), std(0xe6d5b8, { roughness: 0.9 }));
   table.rotation.x = -Math.PI / 2;
-  table.position.y = -3.01;
+  table.position.y = -SOIL - 0.01;
   g.add(table);
-  const soil = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), std(0x5a3920, { roughness: 1 }));
-  soil.position.y = -1.5;
+  // つちの よこの めんは すこし すけて、なかの ようちゅうが みえる
+  const soilTop = std(0x5a3920, { roughness: 1 });
+  const soilSide = new THREE.MeshStandardMaterial({ color: 0x3e2412, roughness: 1, transparent: true, opacity: 0.62, depthWrite: false });
+  const soilBack = std(0x2e1a0c, { roughness: 1 });
+  // めんの じゅんばん：+x, -x, うえ, した, まえ, うしろ（うしろは すけない）
+  const soil = new THREE.Mesh(new THREE.BoxGeometry(w, SOIL, d), [soilSide, soilSide, soilTop, soilTop, soilSide, soilBack]);
+  soil.position.y = -SOIL / 2;
+  soil.renderOrder = 1;
   g.add(soil);
+  const glassH = h - 3 + SOIL;
   const glass = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
+    new THREE.BoxGeometry(w, glassH, d),
     new THREE.MeshStandardMaterial({ color: 0xdff3ff, transparent: true, opacity: 0.12, roughness: 0.1, depthWrite: false, side: THREE.BackSide }),
   );
-  glass.position.y = h / 2 - 3;
+  glass.position.y = glassH / 2 - SOIL;
   g.add(glass);
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), new THREE.LineBasicMaterial({ color: 0x8fb4c8 }));
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, glassH, d)), new THREE.LineBasicMaterial({ color: 0x8fb4c8 }));
   edges.position.copy(glass.position);
   g.add(edges);
   // ふたは ふちだけ（うえから のぞける ように）
@@ -216,11 +226,20 @@ function buildCase(dims) {
   }
   // とまりぎ と おちば
   const bark = std(0x6b4a2e, { roughness: 0.9 });
-  const log = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.025, w * 0.029, w * 0.4, 10), bark);
+  const logR = w * 0.029;
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(logR, logR, w * 0.4, 12), bark);
   log.rotation.z = Math.PI / 2;
   log.rotation.y = 0.5;
-  log.position.set(-w * 0.1, 1.0, d * 0.26); // おきものは おくに ならべるので、まるたは てまえ
+  log.position.set(-w * 0.1, logR * 0.75, d * 0.26); // おきものは おくに ならべるので、まるたは てまえ
   g.add(log);
+  log.updateMatrixWorld(true);
+  // むしが まるたを のりこえる ための かたち（じくの りょうはし・はんけい・たかさ）
+  const logShape = {
+    a: log.localToWorld(V(0, w * 0.2, 0)),
+    b: log.localToWorld(V(0, -w * 0.2, 0)),
+    r: logR,
+    y: log.position.y,
+  };
   const leaf = std(0x8a6a2a, { roughness: 0.8, side: THREE.DoubleSide });
   for (let i = 0; i < 6; i++) {
     const l = new THREE.Mesh(new THREE.CircleGeometry(1, 12), leaf);
@@ -229,7 +248,19 @@ function buildCase(dims) {
     l.position.set((Math.random() - 0.5) * w * 0.8, 0.03 + i * 0.005, (Math.random() - 0.5) * d * 0.8);
     g.add(l);
   }
-  return g;
+  return { group: g, log: logShape };
+}
+
+// (x, z) の じめんの たかさ。まるたの うえなら まるたの ひょうめん
+function groundHeight(log, x, z) {
+  if (!log) return 0;
+  const ax = log.b.x - log.a.x;
+  const az = log.b.z - log.a.z;
+  const t = ((x - log.a.x) * ax + (z - log.a.z) * az) / (ax * ax + az * az);
+  if (t < 0 || t > 1) return 0;
+  const dist = Math.hypot(x - (log.a.x + ax * t), z - (log.a.z + az * t));
+  if (dist >= log.r) return 0;
+  return Math.max(0, log.y + Math.sqrt(log.r * log.r - dist * dist));
 }
 
 // ---------- おきもの（むしが あそぶ） ----------
@@ -349,6 +380,7 @@ export function createInsectRoom(container, { onSelect }) {
   let caseDims = null;
   let bounds = { x: 10, z: 6 };
   let decors = [];
+  let logShape = null;
   const actors = new Map();
   let selected = null;
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.1, 32), new THREE.MeshBasicMaterial({ color: 0xff8a3d, transparent: true, opacity: 0.9 }));
@@ -360,7 +392,9 @@ export function createInsectRoom(container, { onSelect }) {
   // decor：[{ type, slot }]、slots：おける かず
   function setCase(dims, decor = [], slots = 2) {
     if (caseGroup) scene.remove(caseGroup);
-    caseGroup = buildCase(dims);
+    const built = buildCase(dims);
+    caseGroup = built.group;
+    logShape = built.log;
     scene.add(caseGroup);
     const [w, d, h] = dims;
     bounds = { x: w / 2 - 2.5, z: d / 2 - 2.5 };
@@ -388,10 +422,11 @@ export function createInsectRoom(container, { onSelect }) {
     const [w, d, h] = caseDims;
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const byWidth = (w * 0.6) / (tanV * camera.aspect);
-    const byHeight = (h * 0.75 + d * 0.3) / tanV;
+    const byHeight = ((h + SOIL) * 0.7 + d * 0.3) / tanV;
     const dist = Math.max(byWidth, byHeight);
-    camera.position.set(0, dist * 0.55, dist * 0.85);
-    controls.target.set(0, 0, 0);
+    // すこし ひくめから：つちの なかの ようちゅうも みえる
+    camera.position.set(0, dist * 0.42, dist * 0.9);
+    controls.target.set(0, -SOIL * 0.3, 0);
     controls.minDistance = dist * 0.3;
     controls.maxDistance = dist * 1.5;
     controls.update();
@@ -419,8 +454,22 @@ export function createInsectRoom(container, { onSelect }) {
     g.scale.setScalar(len);
     g.position.copy(randomSpot());
     g.rotation.y = Math.random() * Math.PI * 2;
-    if (p.stage === 'larva') g.position.y = -0.06 * len; // すこし つちに もぐっている
-    if (p.sleeping) g.position.y = -0.3 * len;          // とうみん：つちに もぐって ねている
+    // ようちゅう・さなぎ・とうみんちゅうは つちの なか、まえの ガラスぎわ（よこから みえる）
+    const [cw, cd] = caseDims;
+    const underX = (Math.random() * 2 - 1) * (cw / 2 - len);
+    const underY = -SOIL * (0.3 + Math.random() * 0.35);
+    if (p.stage === 'larva') {
+      g.rotation.order = 'XYZ';
+      g.rotation.set(Math.PI / 2, 0, 0); // C のかたちを ガラスに むける
+      g.position.set(underX, underY, cd / 2 - 0.25 * len);
+    } else if (p.stage === 'pupa') {
+      g.rotation.order = 'XYZ';
+      g.rotation.set(Math.PI / 2, Math.PI, 0); // あたまを うえに、ガラスの ほうを むいた さなぎ
+      g.position.set(underX, underY, cd / 2 - 0.32 * len);
+    } else if (p.sleeping) {
+      g.rotation.y = Math.PI / 2;
+      g.position.set(underX, -SOIL * 0.35, cd / 2 - 0.35 * len);
+    }
     g.traverse((o) => (o.userData.petId = p.id));
     scene.add(g);
     const shadow = new THREE.Mesh(new THREE.CircleGeometry(len * 0.45, 20), shadowMat);
@@ -516,6 +565,40 @@ export function createInsectRoom(container, { onSelect }) {
   }
 
   // p に むかって すすむ。ついたら true。のぼりは からだを かたむける
+  // じめんを あるく：まるたの うえでは たかさを あわせ、さかに そって からだを かたむける
+  function followGround(a) {
+    const g = a.g;
+    const fx = Math.sin(g.rotation.y) * a.len * 0.35;
+    const fz = Math.cos(g.rotation.y) * a.len * 0.35;
+    const hHere = groundHeight(logShape, g.position.x, g.position.z);
+    const hFront = groundHeight(logShape, g.position.x + fx, g.position.z + fz);
+    const hBack = groundHeight(logShape, g.position.x - fx, g.position.z - fz);
+    g.position.y = Math.max(hHere, (hFront + hBack) / 2);
+    const want = -Math.atan2(hFront - hBack, a.len * 0.7);
+    g.rotation.x += (want - g.rotation.x) * 0.3;
+  }
+
+  // じめんの うえの p に むかって あるく（まるたは のりこえる）。ついたら true
+  function walkTo(a, p, speed, dt) {
+    const g = a.g;
+    const dx = p.x - g.position.x;
+    const dz = p.z - g.position.z;
+    const dist = Math.hypot(dx, dz);
+    const v = speed * dt;
+    if (dist <= v || dist < 0.05) {
+      g.position.x = p.x;
+      g.position.z = p.z;
+      followGround(a);
+      return true;
+    }
+    g.rotation.y = Math.atan2(dx, dz);
+    g.position.x += (dx / dist) * v;
+    g.position.z += (dz / dist) * v;
+    followGround(a);
+    animateLegs(a, v);
+    return false;
+  }
+
   function moveTo(a, p, speed, dt) {
     const g = a.g;
     const d = new THREE.Vector3().subVectors(p, g.position);
@@ -540,8 +623,11 @@ export function createInsectRoom(container, { onSelect }) {
     a.g.visible = true;
     a.g.rotation.x = 0;
     a.g.rotation.z = 0;
-    a.g.position.y = 0;
+    followGround(a);
   }
+
+  // じめん（または まるたの うえ）に いる か
+  const g0 = (a) => a.g.position.y <= groundHeight(logShape, a.g.position.x, a.g.position.z) + 0.05;
 
   // あいている おきものを えらんで あそびに いく
   function startPlay(a) {
@@ -559,7 +645,9 @@ export function createInsectRoom(container, { onSelect }) {
     if (pl.phase === 'go' || pl.phase === 'back') {
       const target = pl.route[pl.idx];
       const mult = pl.speed[pl.idx] ?? 1;
-      if (moveTo(a, target, a.speed * mult, dt)) {
+      // じめんの うえ どうしの いどう（おきものへの いきかえり）は まるたを のりこえて あるく
+      const onGround = target.y < 0.01 && g0(a) && pl.idx === (pl.phase === 'go' ? 0 : pl.route.length - 1);
+      if ((onGround ? walkTo : moveTo)(a, target, a.speed * mult, dt)) {
         pl.idx++;
         if (pl.idx >= pl.route.length) {
           if (pl.phase === 'back') return stopPlay(a);
@@ -635,14 +723,15 @@ export function createInsectRoom(container, { onSelect }) {
         let diff = want - g.rotation.y;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         g.rotation.y += Math.sign(diff) * Math.min(Math.abs(diff), dt * 2.5);
-        g.rotation.x = 0;
         const v = a.speed * dt * (Math.abs(diff) > 1 ? 0.3 : 1);
         g.position.x += Math.sin(g.rotation.y) * v;
         g.position.z += Math.cos(g.rotation.y) * v;
+        followGround(a);
         animateLegs(a, v);
       }
     }
-    a.shadow.visible = g.visible && g.position.y < 1;
+    a.shadow.visible = g.visible && g.position.y > -0.5 && g.position.y < 1;
+    if (a.shadow.visible) a.shadow.position.y = groundHeight(logShape, g.position.x, g.position.z) + 0.02;
     a.shadow.position.x = g.position.x;
     a.shadow.position.z = g.position.z;
   }
