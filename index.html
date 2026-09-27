@@ -28,6 +28,10 @@
     <h1>だれが やる？</h1>
     <div id="who-list" class="who-list"></div>
     <button id="who-add" class="small-btn who-add">＋ こどもを ふやす</button>
+    <div id="storage-warning" class="storage-warning" hidden>
+      ⚠️ このブラウザでは記録が保存できません。保護者メニューを確認してください。
+    </div>
+    <button id="settings-btn" class="settings-btn">⚙️ 保護者メニュー（記録の確認・バックアップ）</button>
   </section>
 
   <!-- ホーム：レベルをえらぶ -->
@@ -138,6 +142,16 @@
     </div>
   </div>
 
+  <div id="settings" class="overlay hidden">
+    <div class="sheet">
+      <div class="sheet-head">
+        <b>⚙️ 保護者メニュー</b>
+        <button id="settings-close" class="small-btn">とじる</button>
+      </div>
+      <div id="settings-body" class="settings-body"></div>
+    </div>
+  </div>
+
   <div id="notice" class="overlay hidden">
     <div class="dialog">
       <div id="notice-text" class="dialog-text notice-text"></div>
@@ -177,5 +191,6 @@
   <script src="app.js"></script>
   <script src="timeattack.js"></script>
   <script src="pets.js"></script>
+  <script src="settings.js"></script>
 </body>
 </html>

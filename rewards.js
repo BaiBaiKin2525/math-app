@@ -9,6 +9,7 @@
 //   streak      { last: さいごに もくひょうを たっせいした ひ, count: れんぞく にっすう }
 //   log         [{ date, amount, reason }]（あたらしい 300 けん）
 
+const LAST_SAVE_KEY = 'mathapp.v1.lastSave'; // さいごに ほぞんした じこく（ほごしゃ がめんで たしかめる）
 const PROFILES_KEY = 'mathapp.v1.profiles';
 const CURRENT_KEY = 'mathapp.v1.current';
 const walletKey = (id) => `mathapp.v1.wallet.${id}`;
@@ -38,6 +39,7 @@ function readJSON(key, fallback) {
 function writeJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(LAST_SAVE_KEY, new Date().toISOString());
   } catch {
     // 保存できなくてもアプリは動かす
   }

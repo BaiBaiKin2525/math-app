@@ -770,3 +770,18 @@ h1 {
 .graves { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .graves small { color: var(--sub); margin-left: 6px; }
 .notice-text { font-size: 22px; line-height: 1.6; }
+/* ---------- ほごしゃ メニュー ---------- */
+.settings-btn { background: none; color: var(--sub); font-size: 15px; padding: 8px; margin-top: 12px; }
+.storage-warning { background: #ffecec; border: 2px solid var(--red); border-radius: 12px; padding: 10px 16px; color: #b3261e; }
+.settings-body { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; font-size: 16px; }
+.set-block { background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 12px 16px; }
+.set-block h3 { margin: 0 0 8px; font-size: 18px; }
+.set-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; }
+.set-facts dt { color: var(--sub); }
+.set-facts dd { margin: 0; font-weight: bold; }
+.set-note { font-size: 14px; color: var(--sub); margin: 8px 0 4px; }
+.set-ua { font-size: 12px; word-break: break-all; }
+.set-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.set-buttons .big-btn { font-size: 17px; padding: 12px 16px; }
+.set-file { cursor: pointer; }
+.set-code { width: 100%; min-height: 70px; font-size: 12px; font-family: monospace; border: 2px solid var(--line); border-radius: 10px; padding: 6px; -webkit-user-select: text; user-select: text; }

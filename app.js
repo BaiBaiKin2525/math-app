@@ -50,6 +50,7 @@ function saveHistory(record) {
     const list = loadAllHistory();
     list.push({ ...record, profile: p ? p.id : null });
     localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-1000)));
+    localStorage.setItem(LAST_SAVE_KEY, new Date().toISOString());
   } catch {
     // 保存できなくてもアプリは動かす
   }

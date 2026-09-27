@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v9';
+const VERSION = 'v10';
 const FILES = [
   './',
   'index.html',
@@ -13,6 +13,7 @@ const FILES = [
   'timeattack.js',
   'pets.js',
   'pet3d.js',
+  'settings.js',
   'manifest.json',
   'icons/icon-192.png',
   'icons/icon-512.png',
