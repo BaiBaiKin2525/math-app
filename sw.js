@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v20';
+const VERSION = 'v22';
 const FILES = [
   './',
   'index.html',
@@ -18,6 +18,10 @@ const FILES = [
   'kakezan.js',
   'tenkai.js',
   'net3d.js',
+  'solid3d.js',
+  'zenhan1.js',
+  'zenhan2.js',
+  'zenhan3.js',
   'app.js',
   'timeattack.js',
   'flatroom.js',

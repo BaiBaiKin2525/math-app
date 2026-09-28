@@ -13,6 +13,16 @@ const PUZZLES = [
   ['AABCC', 'ABBBC', 'DDEFF', 'DEEEF'],
   ['AAAA', 'BCCD', 'BCCD', 'BBDD'],
 ];
+// 2年 前半「パズルであそぼう」：いたが 2〜3まいの ちいさい パズル
+const EASY_PUZZLES = [
+  ['AB', 'AB'],
+  ['AAB', 'ABB'],
+  ['ABB', 'AAB'],
+  ['AAA', 'BCC', 'BBC'],
+  ['AAB', 'CAB', 'CCB'],
+  ['AABB', 'AABB'],
+];
+
 // チャレンジ：いたが おおい・おおきい
 const HARD_PUZZLES = [
   ['AABBB', 'ACCCB', 'DDDCE', 'DFFEE'],
@@ -49,6 +59,11 @@ function parsePuzzle(rows) {
 
 UNITS.pazuru = {
   questions(opts = {}) {
+    if (opts.easy) {
+      const qs = shuffle(EASY_PUZZLES).slice(0, 5).map((p) => ({ kind: 'puzzle', puzzle: p, label: `パズル（${p.length}×${p[0].length}）` }));
+      qs.push({ kind: 'area', puzzle: EASY_PUZZLES[3], label: `タイルは ${rb('何', 'なん')}まい？` });
+      return qs;
+    }
     if (opts.hard) {
       const qs = shuffle(HARD_PUZZLES).map((p) => ({ kind: 'puzzle', puzzle: p, label: `パズル（${p.length}×${p[0].length}）` }));
       qs.push({ kind: 'area', puzzle: HARD_PUZZLES[3], label: `タイルは ${rb('何', 'なん')}まい？` });
