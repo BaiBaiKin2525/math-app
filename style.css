@@ -867,3 +867,24 @@ ruby rt { font-size: .5em; font-weight: normal; }
 .kk-cell.active { background: #fff; color: var(--orange); box-shadow: inset 0 0 0 3px var(--orange); animation: glowcell 1.2s ease-in-out infinite; }
 @keyframes glowcell { 50% { box-shadow: inset 0 0 0 5px var(--orange); } }
 .kk-cell.wrong { animation: shake .4s; background: #ffd6d6; }
+/* くふうしよう：数の カード */
+.kufu-row { display: flex; align-items: center; justify-content: center; gap: calc(var(--s) * .2); flex-wrap: wrap; }
+.kufu-plus { font-size: calc(var(--s) * .6); font-weight: bold; color: var(--sub); }
+.kufu-chip {
+  min-width: var(--s);
+  height: var(--s);
+  padding: 0 calc(var(--s) * .15);
+  border-radius: 16px;
+  background: var(--card);
+  border: 4px solid var(--line);
+  font-size: calc(var(--s) * .55);
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 4px 0 var(--line);
+}
+.kufu-chip.tappable { border-color: #bcd6ff; }
+.kufu-chip.selected { border-color: var(--blue); background: #e8f1ff; transform: translateY(-4px); }
+.kufu-chip.grouped { border-color: var(--green); background: #e7f6ea; color: #2c7a45; }
+.kufu-chip.wrong { animation: shake .4s; border-color: var(--red); }
+.kufu-note { margin-top: 20px; font-size: clamp(22px, 3vw, 32px); color: var(--ink); text-align: center; }
+.kufu-note b { color: var(--green); }

@@ -6,7 +6,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const HISTORY_KEY = 'mathapp.v1.history';
 const MAX_DIGITS = 4;
-const OPS = { add: '+', sub: '−', mul: '×', mul2: '×', addn: '+', kukuhyo: '' };
+const OPS = { add: '+', sub: '−', mul: '×', mul2: '×', addn: '+', kukuhyo: '', kufu: '+' };
 
 const state = {
   level: null,
@@ -233,6 +233,8 @@ function buildSteps(type, q) {
       return [{ kind: 'pick-x' }, { kind: 'pick-y' }, { kind: 'answer', expected: a * b }];
     case 'kukuhyo':
       return kukuSteps(q);
+    case 'kufu':
+      return kufuSteps(q);
     case 'addn':
       // いちの くらいから じゅんに。くりあがりが あれば 「1 + 4 + 3」の ように たす
       return addColumns(a, b).filter((c) => !c.auto).map((c) => ({
@@ -307,6 +309,8 @@ function mountVisual() {
     state.view = createPlaceValueView(box, q, { tiles: state.level.tiles !== false });
   } else if (type === 'kukuhyo') {
     state.view = createKukuTable(box, { onTap: kukuTap });
+  } else if (type === 'kufu') {
+    state.view = createKufuView(box, q, { onTap: kufuTap });
   } else {
     const up = (v) => Math.max(10, Math.min(100, Math.ceil((v + 1) / 10) * 10));
     const size = type === 'mul' ? { xMax: 10, yMax: 10 } : { xMax: up(q.a), yMax: up(q.b) };
@@ -359,6 +363,11 @@ function enterStep() {
     view.hidden = step.hidden || [];
     view.active = step.cell || null;
     view.rows = step.rows || [];
+  }
+  if (state.level.type === 'kufu') {
+    view.mode = step.kind === 'pair' ? 'pair' : 'none';
+    view.selected = new Set();
+    view.note = step.note || '';
   }
   // タイルを とる あいだは えを かくさない
   $('visual').classList.toggle('hidden',
@@ -453,6 +462,38 @@ function kukuTap(a, b) {
   soundNg();
   view.flash(key);
   say(`${a}×${b} は ${a * b} だよ`, true);
+}
+
+// くふうしよう：数の カードを タップした とき（2つ えらんで まとまりを つくる）
+function kufuTap(i) {
+  const step = curStep();
+  const view = state.view;
+  if (state.locked || !step || view.mode !== 'pair' || view.grouped.includes(i)) return;
+  if (view.selected.has(i)) view.selected.delete(i);
+  else view.selected.add(i);
+  soundTick();
+  view.draw();
+  if (view.selected.size < 2) return;
+  const q = current();
+  const [x, y] = [...view.selected];
+  if (q.nums[x] + q.nums[y] === step.target) {
+    view.grouped = [x, y];
+    view.selected = new Set();
+    view.draw();
+    state.locked = true;
+    judge(true);
+    soundOk();
+    setTimeout(advanceStep, 900);
+    return;
+  }
+  state.mistake = true;
+  soundNg();
+  view.flash();
+  say(`${q.nums[x]} + ${q.nums[y]} = ${q.nums[x] + q.nums[y]}。${step.target} に なる 2つを さがそう`, true);
+  setTimeout(() => {
+    view.selected = new Set();
+    view.draw();
+  }, 500);
 }
 
 // ひきざんで タイルを とりおわった とき
@@ -651,7 +692,7 @@ async function checkAnswer() {
     view.reveal = step.reveal;
     view.draw();
   }
-  if (state.level.type !== 'mul2' && state.level.type !== 'kukuhyo') {
+  if (['add', 'sub', 'mul'].includes(state.level.type)) {
     await sleep(700);
     countAlong();
   }

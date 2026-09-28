@@ -146,6 +146,11 @@ const LEVELS = [
     make: () => kukuQuestions(),
   },
   {
+    id: 'j2-kufu', type: 'kufu', group: 'じゅけんの どだい（2年）',
+    title: '② くふうしよう', desc: '<ruby>計算<rt>けいさん</rt></ruby>の くふう（10の まとまり など）',
+    make: () => kufuQuestions(),
+  },
+  {
     id: 'free9', type: 'free', group: 'タイルで あそぶ',
     title: 'タイル くくひょう', desc: 'めもりを うごかして みよう',
     xMax: 10, yMax: 10, split: false,
