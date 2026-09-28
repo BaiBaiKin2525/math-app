@@ -1052,3 +1052,5 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 .sk-grid { display: grid; gap: 6px; }
 .sk-grid span { width: 30px; height: 30px; }
 .sk-dot { border-radius: 50%; background: var(--orange); }
+.level-card .pt { font-size: 13px; color: #b07d00; margin-top: auto; }
+.level-card .pt + .best { margin-top: 0; }

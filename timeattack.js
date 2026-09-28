@@ -193,7 +193,7 @@ function taEnd() {
     <ol class="ranking">${taRanking(ta.level.id)
       .map((r) => `<li class="${r.date === record.date ? 'me' : ''}"><b>${r.correct}</b>もん<em>${who(r.profile)}</em><span>${fmt(r.date)}</span></li>`)
       .join('')}</ol>`;
-  renderEarned(awardSet({ correct: ta.correct, total: ta.correct + ta.wrong, full: true }));
+  renderEarned(awardSet({ correct: ta.correct, total: ta.correct + ta.wrong, full: true, level: ta.level, wrong: ta.wrong }));
 
   $('retry-wrong').style.display = 'none';
   $('retry-all').onclick = () => startTimeAttack(ta.level);

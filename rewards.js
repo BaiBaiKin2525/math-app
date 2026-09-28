@@ -17,15 +17,28 @@ const PROFILE_ICONS = ['🦊', '🐰', '🐻', '🐼'];
 
 // ポイントの ルール。かえる ときは ここだけ
 const POINT_RULES = {
-  perCorrect: 1,        // 1もん せいかい（1かいめで）
-  finishSet: 5,         // セットを さいごまで
-  perfect: 5,           // ぜんもん せいかい
-  dailyCap: 150,        // べんきょうで もらえる 1にちの じょうげん
+  dailyCap: 250,        // べんきょうで もらえる 1にちの じょうげん
   dailyGoalSets: 3,     // まいにちの もくひょう（セット）
   dailyGoalBonus: 20,   // もくひょう たっせい（じょうげんの そと）
   streakPerDay: 2,      // れんぞく ボーナス ＝ にっすう × 2（2にちめから、じょうげんの そと）
   streakMax: 14,
 };
+
+// もんだいの むずかしさで かわる ポイント
+//   per：1もん せいかい（1かいめで）、perfect：ぜんもん せいかい ボーナス、net：せいかい − まちがい
+function pointRuleFor(level) {
+  const id = level.id;
+  if (id === 'ta-random') return { net: true, perfect: 0, name: 'せいかい − まちがい' };
+  if (id === 'ta-order') return { per: 1, perfect: 0 };
+  if (/^j2a?h-/.test(id)) return { per: 3, perfect: 10 };            // じゅけんの どだい チャレンジ
+  if (/^j2a?-|^j2-/.test(id)) return { per: 2, perfect: 10 };         // じゅけんの どだい
+  if (level.type === 'mul2' || level.type === 'addn') return { per: 2, perfect: 5 };
+  if (level.type === 'mul') {
+    const dan = Number((id.match(/^mul(\d)$/) || [])[1]);
+    return dan && dan <= 5 ? { per: 1, perfect: 2 } : { per: 1, perfect: 5 }; // 1〜5のだんは かんたん
+  }
+  return { per: 1, perfect: 2 };                                       // たしざん・ひきざん
+}
 
 function readJSON(key, fallback) {
   try {
@@ -125,7 +138,8 @@ function todayStatus(id) {
 // セットが おわった ときに よぶ。もらった ポイントの うちわけを かえす
 //   correct：1かいめで せいかいした かず、total：もんだいの かず
 //   full：ふつうの セットを さいごまで やった（まちがえた もんだいの やりなおしは false）
-function awardSet({ correct, total, full }) {
+//   level：どの もんだいか（むずかしさで ポイントが かわる）、wrong：まちがえた かず（タイムアタック）
+function awardSet({ correct, total, full, level, wrong = 0 }) {
   const profile = currentProfile();
   if (!profile) return null;
   const R = POINT_RULES;
@@ -145,9 +159,10 @@ function awardSet({ correct, total, full }) {
       items.push({ label, n: got });
     }
   };
-  addStudy('せいかい', correct * R.perCorrect);
-  if (full) addStudy('さいごまで できた', R.finishSet);
-  if (full && total > 0 && correct === total) addStudy('ぜんもん せいかい', R.perfect);
+  const rule = pointRuleFor(level);
+  if (rule.net) addStudy(`せいかい ${correct} − まちがい ${wrong}`, Math.max(0, correct - wrong));
+  else addStudy(`せいかい ${correct}もん × ${rule.per}`, correct * rule.per);
+  if (full && rule.perfect && total > 0 && correct === total) addStudy('ぜんもん せいかい', rule.perfect);
   day.earned += study;
   if (full) day.sets++;
 

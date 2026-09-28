@@ -235,9 +235,16 @@ function renderHome() {
       }
       const card = document.createElement('button');
       card.className = `level-card ${level.type}`;
+      // もらえる ポイント（むずかしいほど おおい）
+      let ptText = '';
+      if (level.type !== 'free') {
+        const r = pointRuleFor(level);
+        ptText = r.net ? '⭐ せいかい − まちがい' : `⭐ 1もん ${r.per}pt${r.perfect ? `・ぜんぶ せいかい +${r.perfect}` : ''}`;
+      }
       card.innerHTML = `
         <span class="t">${level.title}</span>
         <span class="d">${level.desc}</span>
+        <span class="pt">${ptText}</span>
         <span class="best">${bestText}</span>`;
       card.addEventListener('click', () => {
         if (level.type === 'free') startFree(level);
@@ -920,7 +927,7 @@ function finish() {
     ? 'まちがえた もんだい： ' + wrong.map((r) => r.label || `${r.a} ${op} ${r.b}`).join('、 ')
     : '';
   $('result-extra').innerHTML = '';
-  renderEarned(awardSet({ correct, total, full: !state.isRetry }));
+  renderEarned(awardSet({ correct, total, full: !state.isRetry, level: state.level }));
   $('retry-wrong').style.display = wrong.length ? '' : 'none';
   $('retry-wrong').onclick = () =>
     startLevel(state.level, shuffle(wrong.map(({ a, b }) => ({ a, b }))), true);
