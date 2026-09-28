@@ -5,7 +5,16 @@ const KK_ICONS = ['🍎', '🐟', '🌸', '⭐', '🍩'];
 
 // ---------- かけ算って何だ？ ----------
 UNITS.kakeimi = {
-  questions() {
+  questions(opts = {}) {
+    if (opts.hard) {
+      // チャレンジ：かけ算の きまり（ぶんける・1へる・いれかえ）
+      const qs = [];
+      for (let i = 0; i < 3; i++) qs.push({ kind: 'split', a: rand(3, 9), b: rand(6, 9), label: 'かけ算を わける' });
+      for (let i = 0; i < 2; i++) qs.push({ kind: 'minusOne', a: rand(3, 9), b: rand(3, 9), label: 'かける数が 1 へると' });
+      for (let i = 0; i < 2; i++) qs.push({ kind: 'swap', a: rand(2, 9), b: rand(2, 9), label: 'いれかえ' });
+      qs.push({ kind: 'array', a: rand(6, 9), b: rand(4, 7), icon: '🟠', label: 'ならんだ ○' });
+      return shuffle(qs);
+    }
     const qs = [];
     for (let i = 0; i < 3; i++) qs.push({ kind: 'groups', a: rand(2, 6), b: rand(2, 5), icon: KK_ICONS[rand(0, 4)], label: '1つ分と いくつ分' });
     for (let i = 0; i < 2; i++) qs.push({ kind: 'toAdd', a: rand(2, 9), b: rand(3, 5), label: 'かけ算を たし算で' });
@@ -22,6 +31,20 @@ UNITS.kakeimi = {
           { kind: 'answer', expected: q.a, unit: 'こ', prompt: `1つの さらに ${q.icon}は ${何}こ？（1つ${rb('分', 'ぶん')}の ${数}）` },
           { kind: 'answer', expected: q.b, unit: `つ${rb('分', 'ぶん')}`, prompt: `さらは ${何}まい？（いくつ${rb('分', 'ぶん')}）` },
           { kind: 'answer', expected: q.a * q.b, before: `${q.a} × ${q.b} =`, prompt: `1つ${rb('分', 'ぶん')}の ${数} × いくつ${rb('分', 'ぶん')} ＝ ${rb('全部', 'ぜんぶ')}の ${数}` },
+        ];
+      case 'split': {
+        const k = rand(2, q.b - 2);
+        return [
+          { kind: 'answer', expected: q.a * (q.b - k), before: `${q.a} × ${q.b} = ${q.a} × ${k} + ${q.a} × □　□ =`, prompt: `${q.a}の だんが わからなく なったら、${q.a} × ${k} と あと いくつ${rb('分', 'ぶん')}？` },
+          { kind: 'answer', expected: q.a * q.b, before: `${q.a * k} + ${q.a * (q.b - k)} =`, prompt: `${q.a} × ${q.b} は？` },
+        ].map((s, i) => (i === 0 ? { ...s, expected: q.b - k } : s));
+      }
+      case 'minusOne':
+        return [{ kind: 'answer', expected: q.a, prompt: `${q.a} × ${q.b - 1} は ${q.a} × ${q.b} より いくつ ${rb('小', 'ちい')}さい？<small>（かける ${数}が 1 へると…）</small>` }];
+      case 'swap':
+        return [
+          { kind: 'choice', options: ['おなじ', 'ちがう'], answer: 0, prompt: `${q.a} × ${q.b} と ${q.b} × ${q.a}、${rb('答', 'こた')}えは？`, explain: `たてと よこを いれかえても ○の ${数}は かわらない` },
+          { kind: 'answer', expected: q.a * q.b, before: `${q.b} × ${q.a} =`, prompt: `${rb('答', 'こた')}えは？` },
         ];
       case 'toAdd':
         return [{
@@ -46,11 +69,13 @@ UNITS.kakeimi = {
     view.draw = () => {
       if (q.kind === 'groups') {
         box.innerHTML = `<div class="kz-wrap">${Array.from({ length: q.b }, () => `<div class="km-plate">${q.icon.repeat(q.a)}</div>`).join('')}</div>`;
-      } else if (q.kind === 'array') {
+      } else if (q.kind === 'array' || q.kind === 'swap') {
+        if (q.kind === 'swap') q = { ...q, icon: '🟠' };
         box.innerHTML = `<div class="km-array" style="grid-template-columns:repeat(${q.a}, 1fr)">${q.icon.repeat(q.a * q.b).match(/./gu).map((c) => `<span>${c}</span>`).join('')}</div>`;
-      } else if (q.kind === 'plusOne') {
+      } else if (q.kind === 'plusOne' || q.kind === 'minusOne' || q.kind === 'split') {
         const row = (n, hl) => `<div class="km-row${hl ? ' hl' : ''}">${'●'.repeat(q.a)}</div>`;
-        box.innerHTML = `<div class="km-rows">${Array.from({ length: q.b + 1 }, (_, i) => row(q.a, i === q.b)).join('')}</div>`;
+        const n = q.kind === 'plusOne' ? q.b + 1 : q.b;
+        box.innerHTML = `<div class="km-rows">${Array.from({ length: n }, (_, i) => row(q.a, q.kind === 'plusOne' ? i === q.b : q.kind === 'minusOne' ? i === q.b - 1 : false)).join('')}</div>`;
       } else {
         box.innerHTML = '';
       }
@@ -77,6 +102,34 @@ function dotShape(kind) {
       wrong: [`${W} × ${H}`, `${W} × ${H} − ${w} + ${h}`],
     };
   }
+  if (kind === 'frame') {
+    // まわりだけの ○（わく）
+    const W = rand(4, 7);
+    const H = rand(4, 6);
+    const cells = [];
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (r === 0 || r === H - 1 || c === 0 || c === W - 1) cells.push([r, c]);
+    return {
+      kind, W, H, cells, total: W * H - (W - 2) * (H - 2),
+      right: `${W} × ${H} − ${W - 2} × ${H - 2}`,
+      wrong: [`${W} × 2 + ${H} × 2`, `${W} × ${H} − ${W - 1} × ${H - 1}`],
+    };
+  }
+  if (kind === 'L2') {
+    // ひだりうえと みぎした が かけた 形
+    const W = rand(5, 7);
+    const H = rand(4, 5);
+    const w1 = rand(1, 2);
+    const h1 = rand(1, 2);
+    const w2 = rand(1, 2);
+    const h2 = rand(1, 2);
+    const cells = [];
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (!(r < h1 && c < w1) && !(r >= H - h2 && c >= W - w2)) cells.push([r, c]);
+    return {
+      kind, W, H, cells, total: W * H - w1 * h1 - w2 * h2,
+      right: `${W} × ${H} − ${w1} × ${h1} − ${w2} × ${h2}`,
+      wrong: [`${W} × ${H} − ${w1} × ${h1}`, `${W} × ${H} + ${w1} × ${h1} − ${w2} × ${h2}`],
+    };
+  }
   const a = rand(2, 5);
   const b = rand(2, 4);
   const c = rand(2, 5);
@@ -92,7 +145,8 @@ function dotShape(kind) {
 }
 
 UNITS.shiki = {
-  questions() {
+  questions(opts = {}) {
+    if (opts.hard) return shuffle(['frame', 'frame', 'frame', 'L2', 'L2', 'L']).map((k) => ({ ...dotShape(k), label: '○の かず' }));
     return shuffle(['L', 'L', 'L', 'two', 'two', 'L']).map((k) => ({ ...dotShape(k), label: '○の かず' }));
   },
   steps(q) {

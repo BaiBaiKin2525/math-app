@@ -42,8 +42,36 @@ function twoDigit(min, max) {
 const QUESTIONS_PER_SET = 10;
 
 // type: add / sub / mul（くく）/ mul2（2けた）/ free（じゆうに あそぶ）
-const LEVELS = [
-  {
+// じゅけんの どだい（2年 前半）の たんげん：[type, title, desc, make(opts)]
+const J2A_UNITS = [
+
+    ['tile2', 'タイルを はろう', 'タイル <ruby>何<rt>なん</rt></ruby>まい？・どちらが <ruby>広<rt>ひろ</rt></ruby>い？', (o) => UNITS.tile2.questions(o)],
+    ['kazu', '<ruby>数<rt>かず</rt></ruby>で あそぼう', '100・10・1、<ruby>数直線<rt>すうちょくせん</rt></ruby>、<ruby>数<rt>かず</rt></ruby>の ならび', (o) => UNITS.kazu.questions(o)],
+    ['yomu', '<ruby>読<rt>よ</rt></ruby>んで みよう', '<ruby>文<rt>ぶん</rt></ruby>しょうだいを よく <ruby>読<rt>よ</rt></ruby>む', (o) => UNITS.yomu.questions(o)],
+    ['hako', 'はこの <ruby>形<rt>かたち</rt></ruby>', '<ruby>面<rt>めん</rt></ruby>・<ruby>辺<rt>へん</rt></ruby>・ちょう<ruby>点<rt>てん</rt></ruby>（3D）', (o) => UNITS.hako.questions(o)],
+    ['tokei', '<ruby>時計<rt>とけい</rt></ruby>で あそぼう', '<ruby>時計<rt>とけい</rt></ruby>を <ruby>読<rt>よ</rt></ruby>む・あわせる・<ruby>午前<rt>ごぜん</rt></ruby> <ruby>午後<rt>ごご</rt></ruby>', (o) => UNITS.tokei.questions(o)],
+    ['monosashi', 'ものさしで あそぼう', '<ruby>線<rt>せん</rt></ruby>を ひく・cm で はかる', (o) => UNITS.monosashi.questions(o)],
+    ['pazuru', 'パズルで あそぼう', 'ちいさい パズル', (o) => (o.hard ? UNITS.pazuru.questions() : UNITS.pazuru.questions({ easy: true }))],
+    ['kasa', 'どれだけ のめるかな？', 'L・dL・mL（かさ）', (o) => UNITS.kasa.questions(o)],
+    ['kakeimi', 'かけ<ruby>算<rt>ざん</rt></ruby>って <ruby>何<rt>なん</rt></ruby>だ？', '1つ<ruby>分<rt>ぶん</rt></ruby> × いくつ<ruby>分<rt>ぶん</rt></ruby>', (o) => UNITS.kakeimi.questions(o)],
+    ['shiki', 'どんな しきを <ruby>立<rt>た</rt></ruby>てるかな？', '○の <ruby>数<rt>かず</rt></ruby>を <ruby>式<rt>しき</rt></ruby>に する', (o) => UNITS.shiki.questions(o)],
+    ['block', 'ブロックで あそぼう', 'つみ<ruby>木<rt>き</rt></ruby>は <ruby>何<rt>なん</rt></ruby>こ？（3D）', (o) => UNITS.block.questions(o)],
+];
+const J2A_HARD_DESC = {
+  tile2: 'はんぶんタイルが おおい・<ruby>何<rt>なん</rt></ruby>まい <ruby>広<rt>ひろ</rt></ruby>い？',
+  kazu: '4けた・1めもり 5 20 50',
+  yomu: '2だんかいの <ruby>文<rt>ぶん</rt></ruby>しょうだい',
+  hako: 'ひごの <ruby>長<rt>なが</rt></ruby>さ・<ruby>正方形<rt>せいほうけい</rt></ruby>の <ruby>面<rt>めん</rt></ruby>',
+  tokei: '1<ruby>分<rt>ぷん</rt></ruby>ずつ・<ruby>時<rt>じ</rt></ruby>を またぐ',
+  monosashi: 'mm まで・2<ruby>本<rt>ほん</rt></ruby>を つなぐ',
+  pazuru: 'いた 3〜6まい',
+  kasa: 'かさの ひきざん・mL',
+  kakeimi: 'かけ<ruby>算<rt>ざん</rt></ruby>の きまり',
+  shiki: 'わくの ○・2か<ruby>所<rt>しょ</rt></ruby> かけた <ruby>形<rt>かたち</rt></ruby>',
+  block: '3だん・かくれた つみ<ruby>木<rt>き</rt></ruby>',
+};
+
+const LEVELS = [  {
     id: 'add1', type: 'add', group: 'たしざん',
     title: 'たしざん ①', desc: '＋1 を おぼえよう',
     make: () => generate(QUESTIONS_PER_SET, () => ({ a: rand(1, 9), b: 1 })),
@@ -145,22 +173,16 @@ const LEVELS = [
     make: () => generate(QUESTIONS_PER_SET, () => ({ a: twoDigit(11, 29), b: twoDigit(11, 29) })),
   },
   // じゅけんの どだい（2年 前半）：SAPIX 2年「2〜7月・夏期」の じゅんばんに あわせる
-  ...[
-    ['tile2', 'タイルを はろう', 'タイル <ruby>何<rt>なん</rt></ruby>まい？・どちらが <ruby>広<rt>ひろ</rt></ruby>い？', (o) => UNITS.tile2.questions(o)],
-    ['kazu', '<ruby>数<rt>かず</rt></ruby>で あそぼう', '100・10・1、<ruby>数直線<rt>すうちょくせん</rt></ruby>、<ruby>数<rt>かず</rt></ruby>の ならび', (o) => UNITS.kazu.questions(o)],
-    ['yomu', '<ruby>読<rt>よ</rt></ruby>んで みよう', '<ruby>文<rt>ぶん</rt></ruby>しょうだいを よく <ruby>読<rt>よ</rt></ruby>む', (o) => UNITS.yomu.questions(o)],
-    ['hako', 'はこの <ruby>形<rt>かたち</rt></ruby>', '<ruby>面<rt>めん</rt></ruby>・<ruby>辺<rt>へん</rt></ruby>・ちょう<ruby>点<rt>てん</rt></ruby>（3D）', (o) => UNITS.hako.questions(o)],
-    ['tokei', '<ruby>時計<rt>とけい</rt></ruby>で あそぼう', '<ruby>時計<rt>とけい</rt></ruby>を <ruby>読<rt>よ</rt></ruby>む・あわせる・<ruby>午前<rt>ごぜん</rt></ruby> <ruby>午後<rt>ごご</rt></ruby>', (o) => UNITS.tokei.questions(o)],
-    ['monosashi', 'ものさしで あそぼう', '<ruby>線<rt>せん</rt></ruby>を ひく・cm で はかる', (o) => UNITS.monosashi.questions(o)],
-    ['pazuru', 'パズルで あそぼう', 'ちいさい パズル', () => UNITS.pazuru.questions({ easy: true })],
-    ['kasa', 'どれだけ のめるかな？', 'L・dL・mL（かさ）', (o) => UNITS.kasa.questions(o)],
-    ['kakeimi', 'かけ<ruby>算<rt>ざん</rt></ruby>って <ruby>何<rt>なん</rt></ruby>だ？', '1つ<ruby>分<rt>ぶん</rt></ruby> × いくつ<ruby>分<rt>ぶん</rt></ruby>', (o) => UNITS.kakeimi.questions(o)],
-    ['shiki', 'どんな しきを <ruby>立<rt>た</rt></ruby>てるかな？', '○の <ruby>数<rt>かず</rt></ruby>を <ruby>式<rt>しき</rt></ruby>に する', (o) => UNITS.shiki.questions(o)],
-    ['block', 'ブロックで あそぼう', 'つみ<ruby>木<rt>き</rt></ruby>は <ruby>何<rt>なん</rt></ruby>こ？（3D）', (o) => UNITS.block.questions(o)],
-  ].map(([type, title, desc, make], i) => ({
+  ...J2A_UNITS.map(([type, title, desc, make], i) => ({
     id: `j2a-${type}`, type, group: 'じゅけんの どだい（2年 前半）',
     groupHtml: '<ruby>受験<rt>じゅけん</rt></ruby>の <ruby>土台<rt>どだい</rt></ruby>（2<ruby>年<rt>ねん</rt></ruby> <ruby>前半<rt>ぜんはん</rt></ruby>）',
     title: `${'ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀ'[i]} ${title}`, desc, make: () => make({}),
+  })),
+  // チャレンジ（2年 前半）
+  ...J2A_UNITS.map(([type, title, , make], i) => ({
+    id: `j2ah-${type}`, type, group: 'じゅけんの どだい 前半 チャレンジ（2年）',
+    groupHtml: '<ruby>受験<rt>じゅけん</rt></ruby>の <ruby>土台<rt>どだい</rt></ruby> <ruby>前半<rt>ぜんはん</rt></ruby> チャレンジ（2<ruby>年<rt>ねん</rt></ruby>）',
+    title: `${'ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀ'[i]}★ ${title}`, desc: J2A_HARD_DESC[type], make: () => make({ hard: true }),
   })),
   // じゅけんの どだい（2年 後半）：SAPIX 2年「9〜1月」の じゅんばんに あわせる
   {
@@ -215,8 +237,8 @@ const LEVELS = [
     ['kakezan', '⑦ かけ<ruby>算<rt>ざん</rt></ruby>を <ruby>考<rt>かんが</rt></ruby>えよう', '2つの しきを くみあわせる', () => UNITS.kakezan.questions({ hard: true })],
     ['tenkai', '⑧ <ruby>立方体<rt>りっぽうたい</rt></ruby>の てんかい<ruby>図<rt>ず</rt></ruby>', 'サイコロ（むかいあう <ruby>面<rt>めん</rt></ruby>の <ruby>和<rt>わ</rt></ruby>は 7）', () => UNITS.tenkai.questions({ hard: true })],
   ].map(([type, title, desc, make]) => ({
-    id: `j2h-${type}`, type, group: 'じゅけんの どだい チャレンジ（2年）',
-    groupHtml: '<ruby>受験<rt>じゅけん</rt></ruby>の <ruby>土台<rt>どだい</rt></ruby> チャレンジ（2<ruby>年<rt>ねん</rt></ruby>）',
+    id: `j2h-${type}`, type, group: 'じゅけんの どだい 後半 チャレンジ（2年）',
+    groupHtml: '<ruby>受験<rt>じゅけん</rt></ruby>の <ruby>土台<rt>どだい</rt></ruby> <ruby>後半<rt>こうはん</rt></ruby> チャレンジ（2<ruby>年<rt>ねん</rt></ruby>）',
     title: title.replace(/^(\S)/, '$1★'), desc, make,
   })),
   {

@@ -19,7 +19,13 @@ UNITS.hako = {
       { kind: 'stick', dims: shuffle([4, 6, 9]), which: rand(0, 2), label: `ひごの ${rb('数', 'かず')}` },
       { kind: 'clay', dims: dims(), label: `ねんど${rb('玉', 'だま')}` },
     ];
-    if (opts.hard) qs.push({ kind: 'total', dims: shuffle([3, 5, 7]), label: `ひごの ${rb('長', 'なが')}さの ${rb('合計', 'ごうけい')}` });
+    if (opts.hard) {
+      qs.push({ kind: 'total', dims: shuffle([3, 5, 7]), label: `ひごの ${rb('長', 'なが')}さの ${rb('合計', 'ごうけい')}` });
+      const k = rand(3, 9);
+      qs.push({ kind: 'cubeTotal', dims: [k, k, k], label: `${rb('立方体', 'りっぽうたい')}の ひご` });
+      const sq = rand(3, 5);
+      qs.push({ kind: 'squares', dims: [sq, sq + rand(3, 5), sq], label: `${rb('正方形', 'せいほうけい')}の ${rb('面', 'めん')}` });
+    }
     return shuffle(qs);
   },
   steps(q) {
@@ -34,6 +40,11 @@ UNITS.hako = {
       case 'same': return [{ kind: 'answer', expected: 4, unit: `${rb('本', 'ほん')}`, prompt: `${lens}。${rb('同', 'おな')}じ ${rb('長', 'なが')}さの ${辺}は ${何}${rb('本', 'ぼん')}ずつ？` }];
       case 'stick': return [{ kind: 'answer', expected: 4, unit: `${rb('本', 'ほん')}`, prompt: `ひごで はこの ${rb('形', 'かたち')}を つくります（${lens}）。<b>${q.dims[q.which]}cm</b>の ひごは ${何}${rb('本', 'ぼん')} いる？` }];
       case 'clay': return [{ kind: 'answer', expected: 8, unit: 'こ', prompt: `ひごを つなぐ ねんど${rb('玉', 'だま')}は ${何}こ いる？` }];
+      case 'cubeTotal': return [{ kind: 'answer', expected: 12 * w, unit: 'cm', prompt: `${rb('立方体', 'りっぽうたい')}を ${w}cm の ひごで つくります。ひごの ${rb('長', 'なが')}さは ${rb('全部', 'ぜんぶ')}で ${何}cm？<small>（${辺}は ${何}${rb('本', 'ぼん')}かな）</small>` }];
+      case 'squares': return [
+        { kind: 'answer', expected: 2, unit: 'こ', prompt: `${lens}。${rb('正方形', 'せいほうけい')}の ${rb('面', 'めん')}は ${何}こ？` },
+        { kind: 'answer', expected: 4, unit: 'こ', prompt: `${rb('長方形', 'ちょうほうけい')}の ${rb('面', 'めん')}は ${何}こ？` },
+      ];
       case 'total': return [
         { kind: 'answer', expected: 4 * (w + h + d), unit: 'cm', prompt: `${lens}。ひごの ${rb('長', 'なが')}さを ${rb('全部', 'ぜんぶ')} たすと ${何}cm？<small>（${rb('同', 'おな')}じ ${rb('長', 'なが')}さが 4${rb('本', 'ほん')}ずつ）</small>` },
       ];
@@ -118,6 +129,10 @@ UNITS.tokei = {
     const sleep = rand(8, 10);
     qs.push({ kind: 'ampm', wake, sleep, label: `${rb('午前', 'ごぜん')}と ${rb('午後', 'ごご')}` });
     qs.push({ kind: 'day', label: `1${rb('日', 'にち')}は ${rb('何時間', 'なんじかん')}` });
+    if (opts.hard) {
+      const st = { h: rand(1, 9), m: rand(6, 11) * 5 };
+      qs.push({ kind: 'durHM', ...st, len: rand(1, 2) * 60 + rand(1, 11) * 5 - st.m % 5, label: `${時()}を またぐ ${rb('時間', 'じかん')}` });
+    }
     return shuffle(qs);
   },
   steps(q) {
@@ -141,6 +156,13 @@ UNITS.tokei = {
       case 'dur': {
         const e = toHM(q.h * 60 + q.m + q.len);
         return [{ kind: 'answer', expected: q.len, unit: `${分()}${rb('間', 'かん')}`, prompt: `${fmtTime(q.h, q.m)} から ${fmtTime(e.h, e.m)} まで ${何}${分()}${rb('間', 'かん')}？`, clock2: e }];
+      }
+      case 'durHM': {
+        const e = toHM(q.h * 60 + q.m + q.len);
+        return [
+          { kind: 'answer', expected: Math.floor(q.len / 60), unit: `${rb('時間', 'じかん')}`, prompt: `${fmtTime(q.h, q.m)} から ${fmtTime(e.h, e.m)} まで ${何}${rb('時間', 'じかん')}${何}${分()}？<small>（ちょうどの ${時()}で くぎって ${rb('考', 'かんが')}えよう）</small>`, clock2: e },
+          { kind: 'answer', expected: q.len % 60, before: `${Math.floor(q.len / 60)}${rb('時間', 'じかん')}`, unit: 分(), prompt: 'のこりは？', clock2: e },
+        ];
       }
       case 'ampm':
         return [{
@@ -214,6 +236,11 @@ UNITS.monosashi = {
       qs.push({ kind: 'draw', mm: opts.hard ? cm * 10 + rand(1, 9) : cm * 10, label: `${rb('線', 'せん')}を ひく` });
     }
     for (let i = 0; i < 2; i++) qs.push({ kind: 'read', len: rand(3, 14) * 10, label: `cm で はかる` });
+    if (opts.hard) {
+      const x = rand(2, 6) * 10 + rand(3, 9);
+      const y = rand(2, 6) * 10 + rand(10 - (x % 10), 9);
+      qs.push({ kind: 'join', x, y, label: `2本の ${rb('線', 'せん')}を つなぐ` });
+    }
     const a = rand(5, 14);
     let b;
     do b = rand(3, 13); while (b === a);
@@ -227,6 +254,13 @@ UNITS.monosashi = {
         return [{ kind: 'draw', mm: q.mm, prompt: `ものさしの 0 から ゆびで なぞって、<b>${cmmm(q.mm)}</b> の ${rb('線', 'せん')}を ひこう`, say: 'ゆびを はなすと しらべるよ' }];
       case 'read':
         return [{ kind: 'answer', expected: q.len / 10, unit: 'cm', prompt: `${rb('色', 'いろ')}の ぼうの ${長}さは ${rb('何', 'なん')}cm？` }];
+      case 'join': {
+        const t2 = q.x + q.y;
+        return [
+          { kind: 'answer', expected: Math.floor(t2 / 10), before: `${cmmm(q.x)} + ${cmmm(q.y)} =`, unit: 'cm', prompt: `${cmmm(q.x)} の ${rb('線', 'せん')}と ${cmmm(q.y)} の ${rb('線', 'せん')}を まっすぐ つなぐと？` },
+          { kind: 'answer', expected: t2 % 10, before: `${cmmm(q.x)} + ${cmmm(q.y)} = ${Math.floor(t2 / 10)}cm`, unit: 'mm', prompt: 'のこりは？' },
+        ];
+      }
       case 'cmp': {
         const longer = q.a > q.b ? 0 : 1;
         return [
@@ -239,6 +273,7 @@ UNITS.monosashi = {
   },
   view(box, q, api) {
     if (q.kind === 'read') return rulerView(box, { bars: [{ start: 0, len: q.len, color: '#3cb46e' }], draggable: false, shift: 0 });
+    if (q.kind === 'join') return rulerView(box, { bars: [{ start: 0, len: q.x, color: '#ff8a3d' }, { start: q.x, len: q.y, color: '#4d96ff' }], draggable: false, shift: 0 });
     if (q.kind === 'cmp') return rulerView(box, { bars: [{ start: 0, len: q.a, color: '#ff8a3d' }, { start: 0, len: q.b, color: '#4d96ff' }], draggable: false, shift: 0 });
     // せんを ひく：ものさしの うえを なぞる
     const view = { end: 0 };

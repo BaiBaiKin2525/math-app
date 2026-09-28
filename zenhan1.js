@@ -47,6 +47,14 @@ function randomPolyomino(n, w = 5, h = 4) {
   return Array.from({ length: h }, (_, r) => Array.from({ length: w }, (_, c) => (has(r, c) ? '#' : '.')).join(''));
 }
 
+// チャレンジ よう：はんぶんの タイルが おおい 形
+const HALF_SHAPES_HARD = [
+  ['a##b', '####', '####', 'c##d'],
+  ['.ab.', 'a##b', 'c##d', '.cd.'],
+  ['a#b', '###', 'c#d'],
+  ['ab.ab', '#####', 'cd.cd'],
+];
+
 const tileArea = (rows) => rows.join('').replace(/\./g, '').split('').reduce((s, ch) => s + (ch === '#' ? 1 : 0.5), 0);
 
 function shapeHTML(rows, cls = '') {
@@ -63,11 +71,11 @@ UNITS.tile2 = {
       const s = randomPolyomino(rand(opts.hard ? 9 : 5, opts.hard ? 13 : 9));
       qs.push({ kind: 'count', shape: s, label: `タイルは ${rb('何', 'なん')}まい？` });
     }
-    for (const s of shuffle(HALF_SHAPES).slice(0, 3)) qs.push({ kind: 'count', shape: s, half: true, label: 'はんぶんの タイル' });
+    for (const s of shuffle(opts.hard ? HALF_SHAPES_HARD : HALF_SHAPES).slice(0, 3)) qs.push({ kind: 'count', shape: s, half: true, label: 'はんぶんの タイル' });
     for (let i = 0; i < 2; i++) {
-      const n = rand(6, 9);
-      const m = Math.random() < 0.3 ? n : n + (Math.random() < 0.5 ? 1 : -1);
-      qs.push({ kind: 'compare', a: randomPolyomino(n), b: randomPolyomino(m), label: 'どちらが ひろい？' });
+      const n = rand(opts.hard ? 9 : 6, opts.hard ? 12 : 9);
+      const m = opts.hard ? n + rand(1, 3) * (Math.random() < 0.5 ? 1 : -1) : Math.random() < 0.3 ? n : n + (Math.random() < 0.5 ? 1 : -1);
+      qs.push({ kind: 'compare', a: randomPolyomino(n), b: randomPolyomino(m), diff: !!opts.hard, label: 'どちらが ひろい？' });
     }
     return shuffle(qs);
   },
@@ -79,7 +87,7 @@ UNITS.tile2 = {
         kind: 'choice', options: ['あ', 'い', `${rb('同', 'おな')}じ`], answer: x > y ? 0 : x < y ? 1 : 2,
         prompt: `あ と い、どちらが ${rb('広', 'ひろ')}い？ タイルの ${rb('数', 'かず')}で くらべよう`,
         explain: `あ は ${x}まい、い は ${y}まい`,
-      }];
+      }].concat(q.diff && x !== y ? [{ kind: 'answer', expected: Math.abs(x - y), unit: 'まい', prompt: `${rb('何', 'なん')}まい ${rb('広', 'ひろ')}い？` }] : []);
     }
     return [{
       kind: 'answer', expected: tileArea(q.shape), unit: 'まい',
@@ -129,7 +137,7 @@ UNITS.kazu = {
       const n = rand(1, 9) * 100 + rand(0, 9) * 10 + rand(0, 9);
       qs.push({ kind: 'place', n, label: `100・10・1 で ${n}` });
     }
-    const r = rand(12, 98) * 10;
+    const r = opts.hard ? [1000, rand(101, 999) * 10][rand(0, 1)] : rand(12, 98) * 10;
     qs.push({ kind: 'tens', n: r, label: `${r} は 10が ${rb('何', 'なん')}こ` });
     for (let i = 0; i < 2; i++) {
       const step = opts.hard ? [5, 20, 50][rand(0, 2)] : [1, 10][rand(0, 1)];
@@ -199,8 +207,24 @@ const YOMU = [
   ['back2', (a, b) => `シールを ${rb('何', 'なん')}まいか もって いました。${b}まい もらったので、${a + b}まいに なりました。はじめに ${rb('何', 'なん')}まい？`],
 ];
 
+// チャレンジ：2だんかいの 文しょうだい
+const YOMU_HARD = [
+  ['in-out', (a, b, c) => `こうえんに ${a}${rb('人', 'にん')} いました。${b}${rb('人', 'にん')} きて、そのあと ${c}${rb('人', 'にん')} ${rb('帰', 'かえ')}りました。いま ${rb('何人', 'なんにん')}？`],
+  ['more', (a, b) => `${rb('赤', 'あか')}い ${rb('花', 'はな')}が ${a}${rb('本', 'ほん')}。${rb('白', 'しろ')}い ${rb('花', 'はな')}は ${rb('赤', 'あか')}より ${b}${rb('本', 'ほん')} ${rb('多', 'おお')}い。あわせて ${rb('何本', 'なんぼん')}？`],
+  ['less', (a, b) => `ひろしさんは カードを ${a}まい。${rb('弟', 'おとうと')}は ひろしさんより ${b}まい ${rb('少', 'すく')}ない。ふたり あわせて ${rb('何', 'なん')}まい？`],
+  ['back3', (a, b, c) => `シールを ${rb('何', 'なん')}まいか もって いました。${b}まい もらって、${c}まい あげたら、${a}まいに なりました。はじめは ${rb('何', 'なん')}まい？`],
+];
+
 UNITS.yomu = {
-  questions() {
+  questions(opts = {}) {
+    if (opts.hard) {
+      return shuffle(YOMU_HARD.concat(YOMU_HARD)).map(([kind, text]) => {
+        const a = rand(20, 45);
+        const b = rand(6, 18);
+        const c = rand(4, Math.min(15, a + b - 5));
+        return { kind, a, b, c, text: text(a, b, c), label: text(a, b, c).replace(/<rt>.*?<\/rt>/g, '').replace(/<[^>]+>/g, '').slice(0, 24) + '…' };
+      });
+    }
     return shuffle(YOMU.concat(YOMU.slice(0, 2))).slice(0, 8).map(([kind, text]) => {
       const a = rand(25, 68);
       const b = rand(8, a - 12);
@@ -210,6 +234,19 @@ UNITS.yomu = {
   },
   steps(q) {
     const { a, b, x } = q;
+    const hard = {
+      'in-out': [`${a} + ${b} − ${q.c}`, [`${a} − ${b} + ${q.c}`, `${a} + ${b} + ${q.c}`], a + b - q.c],
+      more: [`${a} + ${a} + ${b}`, [`${a} + ${b}`, `${a} + ${a} − ${b}`], a + a + b],
+      less: [`${a} + ${a} − ${b}`, [`${a} − ${b}`, `${a} + ${a} + ${b}`], a + a - b],
+      back3: [`${a} − ${b} + ${q.c}`, [`${a} + ${b} − ${q.c}`, `${a} + ${b} + ${q.c}`], a - b + q.c],
+    }[q.kind];
+    if (hard) {
+      const [right, wrong, answer] = hard;
+      return [
+        { kind: 'choice', ...mix([right, ...wrong]), prompt: `${rb('式', 'しき')}は どれ？（1つの ${rb('式', 'しき')}に まとめると）`, say: `じゅんばんに ${rb('図', 'ず')}に かいて ${rb('考', 'かんが')}えよう`, hint: 'ふえた？ へった？ を 1つずつ たしかめよう' },
+        { kind: 'answer', expected: answer, before: `${right} =`, prompt: `${rb('答', 'こた')}えは？` },
+      ];
+    }
     const right = { add: `${a} + ${b}`, sub: `${a} − ${b}`, diff: `${a} − ${b}`, back: `${a} + ${b}`, back2: `${a + b} − ${b}` }[q.kind];
     const wrong = { add: [`${a} − ${b}`, `${a} + ${x}`], sub: [`${a} + ${b}`, `${a} − ${x}`], diff: [`${a} + ${b}`, `${b} − ${a}`], back: [`${a} − ${b}`, `${b} − ${a}`], back2: [`${a + b} + ${b}`, `${a} − ${b}`] }[q.kind];
     const answer = { add: a + b, sub: a - b, diff: a - b, back: a + b, back2: a }[q.kind];
@@ -271,6 +308,14 @@ UNITS.kasa = {
     const r = rand(10 - p, 9);
     qs.push({ kind: 'add', p, r, label: `${p}dL + ${r}dL` });
     qs.push({ kind: 'ml', from: Math.random() < 0.5 ? 'L' : 'dL', label: 'mL' });
+    if (opts.hard) {
+      const L1 = rand(1, 3);
+      const d1 = rand(0, 5);
+      const s2 = rand(d1 + 2, 9);
+      qs.push({ kind: 'sub', l: L1, d: d1, s: s2, label: `${L1}L${d1}dL − ${s2}dL` });
+      const ml = rand(1, 3) * 1000 + rand(1, 9) * 100;
+      qs.push({ kind: 'mlmix', ml, label: `${Math.floor(ml / 1000)}L${ml % 1000}mL` });
+    }
     const c1 = rand(1, 2) * 10 + rand(1, 8);
     const c2 = c1 + (Math.random() < 0.5 ? 1 : -1) * rand(1, 3);
     qs.push({ kind: 'cmp', a: c1, b: c2, label: 'どちらが おおい？' });
@@ -299,6 +344,14 @@ UNITS.kasa = {
           { kind: 'answer', expected: t % 10, before: `${q.p}dL + ${q.r}dL = ${Math.floor(t / 10)}L`, unit: 'dL', prompt: 'のこりは？' },
         ];
       }
+      case 'sub': {
+        const t = q.l * 10 + q.d - q.s;
+        return [
+          { kind: 'answer', expected: t, before: `${LdL(q.l * 10 + q.d)} − ${q.s}dL =`, unit: 'dL', prompt: `dL に そろえて ひこう。${何}dL？` },
+        ];
+      }
+      case 'mlmix':
+        return [{ kind: 'answer', expected: q.ml, before: `${Math.floor(q.ml / 1000)}L${q.ml % 1000}mL =`, unit: 'mL', prompt: `1L は 1000mL。${何}mL？` }];
       case 'ml':
         return q.from === 'L'
           ? [{ kind: 'answer', expected: 1000, before: '1L =', unit: 'mL', prompt: `1L は ${何}mL？` }]
