@@ -702,6 +702,7 @@ function openZukan() {
 }
 
 function showZukanDetail(k) {
+  disposeZukanModel();
   const el = $('zukan-detail');
   if (!k) {
     const graves = pets.data.graves.slice().reverse();
@@ -721,6 +722,9 @@ function showZukanDetail(k) {
   }
   el.innerHTML = `
     <div class="info-title">${sp.icon} ${sp.name}</div>
+    <div id="zukan-3d" class="zukan-3d"></div>
+    ${sp.larva ? `<div class="z-stages">${['larva', 'pupa', 'adult'].map((s) =>
+      `<button class="z-stage${s === 'adult' ? ' active' : ''}" data-stage="${s}">${STAGE_NAMES[s]}</button>`).join('')}</div>` : ''}
     <div class="z-stats">
       <span>さいだい <b>${rec.maxSize || '—'}</b>mm</span>
       <span>かった かず <b>${rec.count}</b></span>
@@ -736,13 +740,44 @@ function showZukanDetail(k) {
     </dl>
     <button class="small-btn" id="zukan-back">← おもいで</button>`;
   $('zukan-back').addEventListener('click', () => showZukanDetail(null));
+  // くるくる まわる 3D（おおきさは これまでの さいだい）
+  const ratio = sp.size[1] > sp.size[0] && rec.maxSize ? (rec.maxSize - sp.size[0]) / (sp.size[1] - sp.size[0]) : 0.7;
+  const showModel = (stage) => mountZukanModel({ species: k, stage, sizeRatio: ratio });
+  el.querySelectorAll('.z-stage').forEach((b) => b.addEventListener('click', () => {
+    el.querySelectorAll('.z-stage').forEach((x) => x.classList.toggle('active', x === b));
+    showModel(b.dataset.stage);
+  }));
+  showModel('adult');
+}
+
+let zukanViewer = null;
+function disposeZukanModel() {
+  if (zukanViewer) zukanViewer.dispose();
+  zukanViewer = null;
+}
+
+async function mountZukanModel(opts) {
+  disposeZukanModel();
+  try {
+    const mod = await import('./pet3d.js');
+    const box = $('zukan-3d');
+    if (!box || $('zukan').classList.contains('hidden')) return;
+    disposeZukanModel();
+    zukanViewer = mod.createModelViewer(box, opts);
+  } catch {
+    const box = $('zukan-3d');
+    if (box) box.remove(); // 3D が つかえない ときは せつめい だけ
+  }
 }
 
 $('pets-back').addEventListener('click', closePets);
 $('feed-btn').addEventListener('click', feedCase);
 $('shop-btn').addEventListener('click', () => openShop());
 $('zukan-btn').addEventListener('click', openZukan);
-$('zukan-close').addEventListener('click', () => $('zukan').classList.add('hidden'));
+$('zukan-close').addEventListener('click', () => {
+  disposeZukanModel();
+  $('zukan').classList.add('hidden');
+});
 $('shop-close').addEventListener('click', closeShop);
 $('notice-ok').addEventListener('click', () => $('notice').classList.add('hidden'));
 document.querySelectorAll('.shop-tab').forEach((b) => b.addEventListener('click', () => openShop(b.dataset.tab)));

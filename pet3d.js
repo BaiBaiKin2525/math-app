@@ -3,51 +3,116 @@
 // たんい は cm。むしの モデルは からだの ながさ 1 で つくって、おおきさに あわせて かくだいする。
 
 // import map を つかわない（ふるい iPad の Safari・Chrome は import map に たいおう していない）。
-// jsDelivr の +esm は OrbitControls の なかの 'three' も おなじ URL に かきかえて くれる
+// jsDelivr の +esm は OrbitControls などの なかの 'three' も おなじ URL に かきかえて くれる
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm';
+import { RoomEnvironment } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js/+esm';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
-const std = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0, ...opts });
+const std = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0, envMapIntensity: 0.6, ...opts });
 
-function ellipsoid(material, sx, sy, sz, pos) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), material);
+// つやつやの からだ（こうちゅうの はね など）
+const shiny = (color, opts = {}) => new THREE.MeshPhysicalMaterial({
+  color, roughness: 0.42, metalness: 0.05, clearcoat: 0.6, clearcoatRoughness: 0.3, envMapIntensity: 0.5, ...opts,
+});
+
+function ellipsoid(material, sx, sy, sz, pos, seg = 24) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, seg, Math.max(8, Math.round(seg * 0.65))), material);
   m.scale.set(sx, sy, sz);
   if (pos) m.position.copy(pos);
   return m;
 }
 
-// a から b へ のびる つつ（あし・しょっかく）
+// a から b へ のびる つつ
 function rod(material, a, b, r1, r2 = r1) {
   const dir = new THREE.Vector3().subVectors(b, a);
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, dir.length(), 6), material);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, dir.length(), 8), material);
   m.position.copy(a).addScaledVector(dir, 0.5);
   m.quaternion.setFromUnitVectors(V(0, 1, 0), dir.clone().normalize());
   return m;
 }
 
-// まがった つの・おおあご
-function curve(material, points, radius) {
-  const path = new THREE.CatmullRomCurve3(points);
-  return new THREE.Mesh(new THREE.TubeGeometry(path, 16, radius, 6, false), material);
-}
-
 function cone(material, a, b, r) {
-  return rod(material, a, b, r, 0.002);
+  return rod(material, a, b, r, 0.001);
 }
 
-// 6 ぽん（または 14 ほん）の あし。pivot を まわして あるく
-function addLegs(group, material, { hips, side, len, hipY, thick, spread = [0.25, 0, -0.3] }) {
+// ふとさが だんだん かわる まがった つつ（つの・おおあご）。r0：ねもと、r1：さき
+function taper(material, points, r0, r1, seg = 20, radial = 10) {
+  const path = new THREE.CatmullRomCurve3(points);
+  const geo = new THREE.TubeGeometry(path, seg, 1, radial, false);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  for (let i = 0; i <= seg; i++) {
+    path.getPointAt(i / seg, c);
+    const r = r0 + (r1 - r0) * Math.pow(i / seg, 0.9);
+    for (let j = 0; j <= radial; j++) {
+      const k = i * (radial + 1) + j;
+      v.fromBufferAttribute(pos, k).sub(c).multiplyScalar(r).add(c);
+      pos.setXYZ(k, v.x, v.y, v.z);
+    }
+  }
+  geo.computeVertexNormals();
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(geo, material));
+  g.add(ellipsoid(material, r0, r0, r0, points[0], 12)); // ねもとの ふた
+  g.userData.path = path;
+  return g;
+}
+
+// だえんたいの ひょうめんに そった せん（はねの すじ・あわせめ）
+function surfaceLine(material, e, x, from, to, r = 0.004) {
+  const pts = [];
+  for (let i = 0; i <= 12; i++) {
+    const z = from + (to - from) * (i / 12);
+    const q = 1 - (x / e.sx) ** 2 - ((z - e.cz) / e.sz) ** 2;
+    if (q <= 0) continue;
+    pts.push(V(x, e.cy + e.sy * Math.sqrt(q) + 0.002, z));
+  }
+  return pts.length > 2 ? taper(material, pts, r, r, 16, 5) : new THREE.Group();
+}
+
+// こんちゅうの あし：つけね（きせつ）→ もも（たいせつ）→ すね（けいせつ・とげ）→ あしさき（ふせつ・つめ）
+function buildLeg(mat, s, { len, hipY, fwd, thick, spines = 0, flat = 1 }) {
+  const pivot = new THREE.Group();
+  const coxa = V(s * len * 0.1, -hipY * 0.12, fwd * 0.05);
+  const knee = V(s * len * 0.42, len * 0.07, fwd * 0.35);
+  const ankle = V(s * len * 0.8, -hipY + len * 0.07, fwd * 0.8);
+  const toe = V(s * len * 0.97, -hipY + 0.005, fwd * 1.02 + len * 0.03);
+  pivot.add(rod(mat, V(0, 0, 0), coxa, thick * 1.4, thick * 1.2));
+  pivot.add(ellipsoid(mat, thick * 1.2, thick * 1.2, thick * 1.2, coxa, 10));
+  pivot.add(rod(mat, coxa, knee, thick * 1.2, thick));
+  pivot.add(ellipsoid(mat, thick, thick, thick, knee, 10));
+  const tibia = rod(mat, knee, ankle, thick * 0.8, thick * 1.05);
+  tibia.scale.x = flat; // こうちゅうの すねは ひらたい
+  pivot.add(tibia);
+  for (let i = 1; i <= spines; i++) {
+    const p = knee.clone().lerp(ankle, 0.25 + (0.7 * i) / (spines + 1));
+    pivot.add(cone(mat, p, p.clone().add(V(s * len * 0.07, len * 0.015, fwd * 0.04)), thick * 0.35));
+  }
+  for (let i = 1; i <= 4; i++) {
+    const p = ankle.clone().lerp(toe, i / 4.4);
+    pivot.add(ellipsoid(mat, thick * 0.34, thick * 0.3, thick * 0.5, p, 8));
+  }
+  for (const c of [-1, 1]) {
+    pivot.add(cone(mat, toe, toe.clone().add(V(s * len * 0.03 + c * len * 0.025, -len * 0.01, len * 0.04)), thick * 0.22));
+  }
+  return pivot;
+}
+
+// あしを ぜんぶ つける。pivot を まわして あるく（3ぼんずつ こうたいに うごく）
+function addLegs(group, mat, { hips, side, len, hipY, thick, spread = [0.3, 0, -0.35], spines = [0], flat = 1, lens }) {
   const legs = [];
   hips.forEach((z, i) => {
     for (const s of [-1, 1]) {
-      const pivot = new THREE.Group();
+      const L = lens ? lens[Math.min(i, lens.length - 1)] : len;
+      const pivot = buildLeg(mat, s, {
+        len: L, hipY, thick, flat,
+        fwd: L * spread[Math.min(i, spread.length - 1)],
+        spines: spines[Math.min(i, spines.length - 1)],
+      });
       pivot.position.set(s * side, hipY, z);
-      const knee = V(s * len * 0.45, len * 0.12, len * spread[Math.min(i, spread.length - 1)] * 0.4);
-      const foot = V(s * len * 0.85, -hipY, len * spread[Math.min(i, spread.length - 1)]);
-      pivot.add(rod(material, V(0, 0, 0), knee, thick));
-      pivot.add(rod(material, knee, foot, thick, thick * 0.6));
       pivot.userData = { side: s, phase: (i + (s > 0 ? 1 : 0)) % 2 ? Math.PI : 0 };
       group.add(pivot);
       legs.push(pivot);
@@ -56,137 +121,416 @@ function addLegs(group, material, { hips, side, len, hipY, thick, spread = [0.25
   return legs;
 }
 
+// しょっかく。pivot を ゆらす
+function antennaPivot(parent, base) {
+  const p = new THREE.Group();
+  p.position.copy(base);
+  parent.add(p);
+  return p;
+}
+
 // ---------- むしの モデル ----------
 
 function buildAnt() {
   const g = new THREE.Group();
-  const body = std(0x1f1512, { roughness: 0.35 });
-  g.add(ellipsoid(body, 0.17, 0.14, 0.22, V(0, 0.22, -0.26)));
-  g.add(ellipsoid(body, 0.05, 0.06, 0.05, V(0, 0.2, -0.05)));
-  g.add(ellipsoid(body, 0.08, 0.08, 0.16, V(0, 0.22, 0.06)));
-  g.add(ellipsoid(body, 0.12, 0.1, 0.12, V(0, 0.24, 0.3)));
-  for (const s of [-1, 1]) {
-    g.add(rod(body, V(s * 0.05, 0.3, 0.38), V(s * 0.12, 0.38, 0.46), 0.012));
-    g.add(rod(body, V(s * 0.12, 0.38, 0.46), V(s * 0.18, 0.3, 0.6), 0.01));
+  const body = shiny(0x1e1310, { roughness: 0.35, clearcoat: 0.8 });
+  const limb = std(0x2b1c16, { roughness: 0.5 });
+  const eye = shiny(0x050505, { roughness: 0.1 });
+  // はら（しまもよう）
+  const gz = -0.31;
+  g.add(ellipsoid(body, 0.18, 0.15, 0.23, V(0, 0.25, gz)));
+  const band = std(0x3a2620, { roughness: 0.4 });
+  for (const dz of [0.08, -0.02, -0.11]) {
+    const q = Math.sqrt(1 - (dz / 0.23) ** 2);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 28), band);
+    ring.scale.set(0.18 * q + 0.002, 0.15 * q + 0.002, 1);
+    ring.position.set(0, 0.25, gz + dz);
+    g.add(ring);
   }
-  const legs = addLegs(g, body, { hips: [0.12, 0.06, 0.0], side: 0.06, len: 0.55, hipY: 0.2, thick: 0.014, spread: [0.35, 0, -0.35] });
-  return { group: g, legs };
+  g.add(ellipsoid(body, 0.04, 0.07, 0.04, V(0, 0.25, -0.06)));   // こしの ふし
+  g.add(ellipsoid(body, 0.08, 0.075, 0.12, V(0, 0.23, 0.06)));   // むね
+  g.add(ellipsoid(body, 0.07, 0.07, 0.07, V(0, 0.27, 0.16)));
+  const head = new THREE.Group();
+  head.position.set(0, 0.27, 0.33);
+  g.add(head);
+  head.add(ellipsoid(body, 0.12, 0.1, 0.12, V(0, 0, 0)));
+  for (const s of [-1, 1]) {
+    head.add(ellipsoid(eye, 0.03, 0.035, 0.03, V(s * 0.1, 0.03, 0.03), 12));
+    head.add(taper(limb, [V(s * 0.04, -0.04, 0.1), V(s * 0.06, -0.05, 0.16), V(s * 0.01, -0.05, 0.2)], 0.018, 0.004));
+  }
+  const antennae = [];
+  for (const s of [-1, 1]) {
+    const a = antennaPivot(head, V(s * 0.05, 0.05, 0.09));
+    a.add(rod(limb, V(0, 0, 0), V(s * 0.09, 0.08, 0.08), 0.011));       // ねもと（まがる まえ）
+    for (let i = 1; i <= 8; i++) {                                         // まがった さき
+      const t = i / 8;
+      a.add(ellipsoid(limb, 0.012, 0.012, 0.016, V(s * (0.09 + 0.06 * t), 0.08 - 0.09 * t, 0.08 + 0.16 * t), 8));
+    }
+    antennae.push(a);
+  }
+  const legs = addLegs(g, limb, { hips: [0.12, 0.07, 0.02], side: 0.06, len: 0.5, hipY: 0.2, thick: 0.014, spread: [0.45, 0.05, -0.45] });
+  const anim = (t) => antennae.forEach((a, i) => (a.rotation.x = Math.sin(t * 7 + i * 2) * 0.25));
+  return { group: g, legs, anim };
 }
 
 function buildDango() {
   const g = new THREE.Group();
-  const shell = std(0x5b5f66, { roughness: 0.45 });
+  const shell = shiny(0x44484f, { roughness: 0.45, clearcoat: 0.5 });
+  const rim = std(0x6a6f76, { roughness: 0.5 });
+  const pale = std(0xa89f92, { roughness: 0.6 });
   const body = new THREE.Group();
-  const n = 9;
-  for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    const w = 0.33 * Math.sin(0.35 + t * 2.4) + 0.05;
-    const seg = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), shell);
-    seg.scale.set(w, 0.22 * (0.7 + 0.3 * Math.sin(t * Math.PI)), 0.075);
-    seg.position.set(0, 0.03, 0.42 - t * 0.84);
-    body.add(seg);
+  // よろいの ような いた（あたまの つぎに 7まい ＋ おしりの ちいさい いた）
+  const plates = [0.3, 0.32, 0.34, 0.345, 0.34, 0.33, 0.3, 0.24, 0.2, 0.16, 0.12];
+  plates.forEach((w, i) => {
+    const z = 0.36 - i * 0.075;
+    const h = 0.18 * (0.55 + 0.45 * Math.sin(((i + 1) / (plates.length + 1)) * Math.PI));
+    const plate = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), shell);
+    plate.scale.set(w, h, 0.07);
+    plate.position.set(0, 0.03, z);
+    body.add(plate);
+    const edge = new THREE.Mesh(new THREE.TorusGeometry(1, 0.018, 6, 24, Math.PI), rim);
+    edge.scale.set(w, h, 0.3);
+    edge.position.set(0, 0.03, z - 0.05);
+    body.add(edge);
+  });
+  const head = ellipsoid(shell, 0.13, 0.08, 0.07, V(0, 0.05, 0.43));
+  body.add(head);
+  const eye = shiny(0x0a0a0a, { roughness: 0.1 });
+  for (const s of [-1, 1]) body.add(ellipsoid(eye, 0.02, 0.02, 0.02, V(s * 0.1, 0.08, 0.45), 8));
+  const antennae = [];
+  for (const s of [-1, 1]) {
+    const a = antennaPivot(body, V(s * 0.06, 0.06, 0.48));
+    for (let i = 1; i <= 6; i++) {
+      const t = i / 6;
+      a.add(ellipsoid(pale, 0.012, 0.012, 0.02, V(s * 0.1 * t, 0.02 * Math.sin(t * 3), 0.12 * t), 8));
+    }
+    antennae.push(a);
   }
-  const pale = std(0xcfc6b8);
-  for (const s of [-1, 1]) body.add(rod(pale, V(s * 0.05, 0.06, 0.45), V(s * 0.14, 0.08, 0.58), 0.012));
+  // しっぽの ちいさな つの
+  for (const s of [-1, 1]) body.add(cone(rim, V(s * 0.06, 0.03, -0.42), V(s * 0.09, 0.02, -0.5), 0.02));
   g.add(body);
-  const legs = addLegs(g, pale, { hips: [0.3, 0.2, 0.1, 0, -0.1, -0.2, -0.3], side: 0.12, len: 0.2, hipY: 0.05, thick: 0.01, spread: [0.1] });
+  const legs = addLegs(g, pale, {
+    hips: [0.3, 0.2, 0.1, 0, -0.1, -0.2, -0.3], side: 0.13, len: 0.22, hipY: 0.05, thick: 0.009, spread: [0.15, 0.05, 0, 0, -0.05, -0.1, -0.15],
+  });
   // まるまった とき
   const ball = new THREE.Group();
   ball.add(ellipsoid(shell, 0.3, 0.3, 0.3, V(0, 0.3, 0)));
-  const ringMat = std(0x44474d, { roughness: 0.5 });
-  for (let i = -2; i <= 2; i++) {
-    const r = new THREE.Mesh(new THREE.TorusGeometry(Math.sqrt(0.09 - (i * 0.1) ** 2) + 0.003, 0.008, 6, 32), ringMat);
-    r.position.set(0, 0.3, i * 0.1);
-    ball.add(r);
+  for (let i = -4; i <= 4; i++) {
+    const zz = i * 0.065;
+    const r = Math.sqrt(0.09 - zz * zz) + 0.004;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.008, 6, 32), rim);
+    ring.position.set(0, 0.3, zz);
+    ball.add(ring);
   }
   ball.visible = false;
   g.add(ball);
-  return { group: g, legs, body, ball };
+  const anim = (t) => antennae.forEach((a, i) => (a.rotation.y = Math.sin(t * 3 + i * 1.7) * 0.3));
+  return { group: g, legs, body, ball, anim };
 }
 
 const BEETLE_STYLE = {
-  kabuto: { color: 0x3a1d12, gloss: 0.35 },
-  kokuwa: { color: 0x1a1411, gloss: 0.3, jaw: 0.55 },
-  nokogiri: { color: 0x5e2a10, gloss: 0.3, jaw: 1.0, teeth: true },
-  miyama: { color: 0x4f3d22, gloss: 0.55, jaw: 0.9, ears: true },
-  ookuwa: { color: 0x0c0c0c, gloss: 0.25, jaw: 0.75, thick: true },
-  kanabun: { color: 0x2d6e3c, gloss: 0.25, metal: 0.6 },
+  kabuto: { color: 0x2b1209, rough: 0.38, legLens: [0.42, 0.36, 0.4], spines: [3, 2, 2] },
+  kokuwa: { color: 0x15100d, rough: 0.42, jaw: 0.55, striae: true, tooth: 'small' },
+  nokogiri: { color: 0x3f1a0a, rough: 0.35, jaw: 1.0, tooth: 'saw' },
+  miyama: { color: 0x3f301a, rough: 0.6, jaw: 0.9, ears: true, hairy: true, tooth: 'fork' },
+  ookuwa: { color: 0x0a0909, rough: 0.35, jaw: 0.75, thick: true, striae: true, tooth: 'big' },
+  kanabun: { color: 0x2a6436, rough: 0.28, metal: true },
 };
 
 // sizeRatio：0（ちいさい）〜 1（おおきい）。おおきい こほど つの・あごが ながい
 function buildBeetle(species, sizeRatio) {
   const st = BEETLE_STYLE[species];
   const g = new THREE.Group();
-  const shell = std(st.color, { roughness: st.gloss, metalness: st.metal || 0.15 });
-  const dark = std(0x120c09, { roughness: 0.5 });
-  g.add(ellipsoid(shell, 0.3, 0.17, 0.36, V(0, 0.25, -0.14)));
-  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.01, 0.62), dark).translateY(0.415).translateZ(-0.14));
-  g.add(ellipsoid(shell, species === 'kanabun' ? 0.27 : 0.26, 0.14, 0.16, V(0, 0.25, 0.26)));
-  g.add(ellipsoid(shell, 0.15, 0.09, 0.11, V(0, 0.21, 0.42)));
-  for (const s of [-1, 1]) g.add(rod(dark, V(s * 0.1, 0.22, 0.5), V(s * 0.2, 0.26, 0.58), 0.012));
+  const shell = st.metal
+    ? shiny(st.color, { metalness: 0.6, roughness: 0.3, envMapIntensity: 0.8 })
+    : st.hairy
+      ? new THREE.MeshPhysicalMaterial({ color: st.color, roughness: 0.65, sheen: 0.6, sheenColor: 0x9c7a3a, sheenRoughness: 0.5, clearcoat: 0.15, envMapIntensity: 0.5 })
+      : shiny(st.color, { roughness: st.rough });
+  const dark = shiny(0x140d0a, { roughness: 0.4, clearcoat: 0.6 });
+  const under = std(0x1c130f, { roughness: 0.55 });
+  const eye = shiny(0x050505, { roughness: 0.08 });
 
-  const k = 0.55 + 0.7 * sizeRatio;
-  if (species === 'kabuto') {
-    const horn = std(0x2a140c, { roughness: 0.3 });
-    const tip = V(0, 0.3 + 0.35 * k, 0.55 + 0.32 * k);
-    g.add(curve(horn, [V(0, 0.2, 0.5), V(0, 0.24, 0.5 + 0.18 * k), V(0, 0.3 + 0.2 * k, 0.55 + 0.3 * k), tip], 0.04));
-    g.add(cone(horn, tip, tip.clone().add(V(0.06, 0.1, 0.02)), 0.028));
-    g.add(cone(horn, tip, tip.clone().add(V(-0.06, 0.1, 0.02)), 0.028));
-    g.add(cone(horn, V(0, 0.36, 0.3), V(0, 0.4 + 0.05 * k, 0.42 + 0.1 * k), 0.035));
-  } else if (st.jaw) {
-    const jaw = std(st.color, { roughness: 0.3, metalness: 0.15 });
-    const L = st.jaw * k;
-    const r = st.thick ? 0.045 : 0.032;
-    for (const s of [-1, 1]) {
-      const pts = [V(s * 0.08, 0.21, 0.48), V(s * 0.17, 0.22, 0.5 + 0.18 * L), V(s * 0.16, 0.23, 0.5 + 0.34 * L), V(s * 0.05, 0.22, 0.5 + 0.44 * L)];
-      g.add(curve(jaw, pts, r));
-      if (st.teeth) for (let i = 1; i <= 3; i++) {
-        const p = new THREE.CatmullRomCurve3(pts).getPoint(0.25 * i);
-        g.add(cone(jaw, p, p.clone().add(V(-s * 0.05, 0, 0.01)), 0.012));
+  // はね（かたい はね）と ふち、まんなかの あわせめ、たての すじ
+  const e = { sx: 0.27, sy: 0.13, sz: 0.42, cy: 0.23, cz: -0.14 };
+  g.add(ellipsoid(shell, e.sx, e.sy, e.sz, V(0, e.cy, e.cz), 32));
+  g.add(surfaceLine(dark, e, 0, 0.2, -0.5, 0.005));
+  if (st.striae) for (const x of [-0.19, -0.11, 0.11, 0.19]) g.add(surfaceLine(dark, e, x, 0.15, -0.45, 0.0025));
+  g.add(ellipsoid(under, 0.24, 0.08, 0.36, V(0, 0.15, -0.12)));
+  // しょうばん（はねの つけねの さんかく）
+  g.add(ellipsoid(shell, 0.035, 0.01, 0.05, V(0, 0.355, 0.22), 12));
+  // むね（ぜんきょうはい）
+  const pw = species === 'kanabun' ? 0.23 : 0.25;
+  g.add(ellipsoid(shell, pw, 0.1, 0.15, V(0, 0.23, 0.28), 28));
+
+  // あたま（つの・おおあごは あたまと いっしょに うごく）
+  const head = new THREE.Group();
+  head.position.set(0, 0.19, 0.45);
+  g.add(head);
+  head.add(ellipsoid(shell, species === 'kanabun' ? 0.1 : 0.14, 0.06, 0.1, V(0, 0, 0)));
+  for (const s of [-1, 1]) head.add(ellipsoid(eye, 0.035, 0.035, 0.035, V(s * (species === 'kanabun' ? 0.09 : 0.13), 0.015, 0.02), 14));
+  if (st.ears) for (const s of [-1, 1]) head.add(ellipsoid(shell, 0.065, 0.05, 0.075, V(s * 0.15, 0.02, -0.02)));
+
+  // しょっかく：クワガタは まがって さきが くし、カブト・カナブンは おうぎ
+  const antennae = [];
+  for (const s of [-1, 1]) {
+    const a = antennaPivot(head, V(s * 0.1, 0.02, 0.07));
+    if (st.jaw) {
+      a.add(rod(dark, V(0, 0, 0), V(s * 0.11, 0.03, 0.06), 0.009));
+      a.add(rod(dark, V(s * 0.11, 0.03, 0.06), V(s * 0.16, 0.02, 0.13), 0.007));
+      for (let i = 0; i < 4; i++) a.add(ellipsoid(dark, 0.006, 0.02, 0.012, V(s * (0.16 + i * 0.012), 0.02, 0.13 + i * 0.006), 8));
+    } else {
+      a.add(rod(dark, V(0, 0, 0), V(s * 0.05, 0, 0.07), 0.008));
+      for (let i = -1; i <= 1; i++) {
+        const plate = ellipsoid(dark, 0.006, 0.018, 0.035, V(s * 0.06, i * 0.015, 0.1), 8);
+        plate.rotation.x = i * 0.3;
+        a.add(plate);
       }
     }
-    if (st.ears) for (const s of [-1, 1]) g.add(ellipsoid(shell, 0.05, 0.05, 0.05, V(s * 0.15, 0.25, 0.44)));
+    antennae.push(a);
   }
-  const legs = addLegs(g, dark, { hips: [0.26, 0.1, -0.06], side: 0.2, len: 0.42, hipY: 0.2, thick: 0.026 });
-  return { group: g, legs };
+
+  const k = 0.55 + 0.7 * sizeRatio;
+  const jaws = [];
+  if (species === 'kabuto') {
+    const horn = shiny(0x2a120a, { roughness: 0.25 });
+    // あたまの つの（うえに そりかえって さきが ふたまた）
+    const tip = V(0, 0.22 + 0.24 * k, 0.3 + 0.24 * k);
+    head.add(taper(horn, [V(0, 0.02, 0.07), V(0, 0.04 + 0.02 * k, 0.18 + 0.12 * k), V(0, 0.1 + 0.12 * k, 0.28 + 0.22 * k), tip], 0.06, 0.03, 24));
+    for (const s of [-1, 1]) {
+      head.add(taper(horn, [tip, tip.clone().add(V(s * 0.04, 0.05, -0.01)), tip.clone().add(V(s * 0.08, 0.09, -0.05))], 0.03, 0.006, 10, 8));
+    }
+    const mid = new THREE.CatmullRomCurve3([V(0, 0.04 + 0.02 * k, 0.18 + 0.12 * k), V(0, 0.1 + 0.12 * k, 0.28 + 0.22 * k)]).getPoint(0.6);
+    for (const s of [-1, 1]) head.add(cone(horn, mid, mid.clone().add(V(s * 0.03, 0.02, 0.04)), 0.015));
+    // むねの つの（まえに つきでて さきが ふたまた）
+    const tt = V(0, 0.36 + 0.02 * k, 0.44 + 0.08 * k);
+    g.add(taper(horn, [V(0, 0.31, 0.3), V(0, 0.35, 0.37 + 0.04 * k), tt], 0.04, 0.018, 14));
+    for (const s of [-1, 1]) g.add(taper(horn, [tt, tt.clone().add(V(s * 0.025, 0.005, 0.03))], 0.018, 0.004, 6, 6));
+  } else if (st.jaw) {
+    const jawMat = shiny(st.color, { roughness: 0.32 });
+    const L = st.jaw * k;
+    const r0 = st.thick ? 0.055 : 0.042;
+    for (const s of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(s * 0.07, 0, 0.09);
+      head.add(pivot);
+      const bend = species === 'nokogiri' ? 0.05 * L : 0;
+      const pts = [V(0, 0, 0), V(s * 0.08, 0.005, 0.12 * L), V(s * (0.07 + bend), 0.02 + bend, 0.26 * L), V(-s * 0.03, 0.01, 0.37 * L)];
+      const jaw = taper(jawMat, pts, r0, 0.005, 24);
+      pivot.add(jaw);
+      const path = jaw.userData.path;
+      const tooth = (u, size) => {
+        const p = path.getPointAt(u);
+        pivot.add(cone(jawMat, p, p.clone().add(V(-s * size, 0.004, size * 0.35)), size * 0.35));
+      };
+      if (st.tooth === 'saw') for (let i = 0; i < 7; i++) tooth(0.25 + i * 0.08, 0.03);
+      if (st.tooth === 'big') tooth(0.35, 0.06);
+      if (st.tooth === 'small') tooth(0.7, 0.03);
+      if (st.tooth === 'fork') {
+        for (const u of [0.3, 0.45, 0.6]) tooth(u, 0.025);
+        const p = path.getPointAt(0.9);
+        pivot.add(cone(jawMat, p, p.clone().add(V(0, 0.06, 0.02)), 0.014));
+      }
+      jaws.push({ pivot, s });
+    }
+  }
+  const legs = addLegs(g, dark, {
+    hips: [0.28, 0.1, -0.06], side: 0.19, len: 0.4, lens: st.legLens || [0.42, 0.36, 0.4],
+    hipY: 0.17, thick: 0.03, spines: st.spines || [2, 2, 2], flat: 1.4,
+  });
+  const phase = Math.random() * 10;
+  const anim = (t) => {
+    antennae.forEach((a, i) => {
+      a.rotation.y = Math.sin(t * 2.2 + phase + i * 2) * 0.18;
+      a.rotation.x = Math.sin(t * 1.3 + phase + i) * 0.1;
+    });
+    // クワガタは ときどき おおあごを ひらく
+    const open = Math.max(0, Math.sin(t * 0.8 + phase) - 0.6) * 0.9;
+    for (const j of jaws) j.pivot.rotation.y = j.s * open;
+    head.rotation.x = Math.sin(t * 0.6 + phase) * 0.05;
+  };
+  return { group: g, legs, anim };
 }
 
 function buildLarva() {
   const g = new THREE.Group();
-  const skin = std(0xf1e8d2, { roughness: 0.55 });
-  const c = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.13, 12, 28, Math.PI * 1.5), skin);
-  c.rotation.x = Math.PI / 2;
-  c.position.y = 0.1;
-  g.add(c);
-  const head = std(0xc0772a, { roughness: 0.4 });
-  g.add(ellipsoid(head, 0.12, 0.11, 0.11, V(0, 0.12, -0.3)));
-  const lines = std(0xd8ccb0);
-  for (let i = 1; i < 6; i++) {
-    const a = (Math.PI * 1.5 * i) / 6;
-    const r = new THREE.Mesh(new THREE.TorusGeometry(0.132, 0.006, 4, 16), lines);
-    r.position.set(Math.cos(a) * 0.3, 0.1, -Math.sin(a) * 0.3);
-    r.rotation.y = a;
-    g.add(r);
+  const body = new THREE.Group();
+  g.add(body);
+  // C のかたちの 1ぽんの からだ。おしりは ふとくて くろっぽい（つちを たべて いるので）
+  const R = 0.3;
+  const A = Math.PI * 1.42;
+  const at = (u) => V(Math.cos(u * A) * R, 0.13, -Math.sin(u * A) * R);
+  const radius = (u) => (u < 0.22 ? 0.155 - u * 0.06 : 0.142 - (u - 0.22) * 0.04);
+  const pts = [];
+  for (let i = 0; i <= 24; i++) pts.push(at(i / 24));
+  const path = new THREE.CatmullRomCurve3(pts);
+  const seg = 72;
+  const radial = 18;
+  const geo = new THREE.TubeGeometry(path, seg, 1, radial, false);
+  const pos = geo.attributes.position;
+  const colors = [];
+  const cream = new THREE.Color(0xe6d7b4);
+  const gray = new THREE.Color(0x8a857a);
+  const v = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  for (let i = 0; i <= seg; i++) {
+    const u = i / seg;
+    path.getPointAt(u, c);
+    // ふしの くびれ
+    const crease = 1 - 0.07 * Math.pow(Math.abs(Math.cos(u * 11 * Math.PI)), 12);
+    const tip = Math.sqrt(Math.sin(Math.min(1, u / 0.05) * Math.PI / 2)); // おしりの さきは まるく とじる
+    const r = radius(u) * crease * Math.max(0.02, tip);
+    const col = gray.clone().lerp(cream, Math.min(1, Math.max(0, (u - 0.12) / 0.14)));
+    for (let j = 0; j <= radial; j++) {
+      const k = i * (radial + 1) + j;
+      v.fromBufferAttribute(pos, k).sub(c).multiplyScalar(r).add(c);
+      pos.setXYZ(k, v.x, v.y, v.z);
+      colors.push(col.r, col.g, col.b);
+    }
   }
-  return { group: g, legs: [] };
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  const skin = new THREE.MeshPhysicalMaterial({
+    vertexColors: true, roughness: 0.55, sheen: 0.2, sheenColor: 0xffffff, clearcoat: 0.2, envMapIntensity: 0.45,
+  });
+  body.add(new THREE.Mesh(geo, skin));
+  // きもん（いきを する あな）
+  const spot = std(0xb06428, { roughness: 0.5 });
+  for (let i = 1; i <= 9; i++) {
+    const u = i / 11;
+    const p = at(u);
+    const out = V(Math.cos(u * A), 0, -Math.sin(u * A));
+    body.add(ellipsoid(spot, 0.016, 0.02, 0.012, p.clone().addScaledVector(out, radius(u) * 0.93).add(V(0, 0.045, 0)), 8));
+  }
+  // あたま・あご・ちいさな あし 6ぽん
+  const headMat = shiny(0xa85a1c, { roughness: 0.35 });
+  const dark = shiny(0x1a0e08, { roughness: 0.35 });
+  const ha = A + 0.28;
+  const hc = V(Math.cos(ha) * R, 0.13, -Math.sin(ha) * R);
+  const head = ellipsoid(headMat, 0.11, 0.1, 0.09, hc);
+  head.rotation.y = ha;
+  body.add(head);
+  const fwd = V(-Math.sin(ha), 0, -Math.cos(ha));
+  const side = V(Math.cos(ha), 0, -Math.sin(ha));
+  for (const s of [-1, 1]) {
+    const b = hc.clone().addScaledVector(fwd, 0.07).addScaledVector(side, s * 0.04).add(V(0, -0.03, 0));
+    body.add(cone(dark, b, b.clone().addScaledVector(fwd, 0.05).addScaledVector(side, -s * 0.02).add(V(0, -0.02, 0)), 0.02));
+  }
+  for (const u of [0.86, 0.91, 0.96]) {
+    const inward = V(-Math.cos(u * A), 0, Math.sin(u * A));
+    const base = at(u).addScaledVector(inward, radius(u) * 0.7);
+    for (const dy of [-0.06, 0.06]) {
+      body.add(rod(headMat, base.clone().add(V(0, dy * 0.6, 0)), base.clone().addScaledVector(inward, 0.07).add(V(0, dy - 0.03, 0)), 0.011, 0.006));
+    }
+  }
+  // いきを して すこし ふくらむ
+  const anim = (t) => {
+    body.scale.y = 1 + Math.sin(t * 2) * 0.03;
+    body.scale.x = 1 - Math.sin(t * 2) * 0.015;
+  };
+  return { group: g, legs: [], anim };
 }
 
 function buildPupa(species) {
   const g = new THREE.Group();
-  const room = new THREE.Mesh(new THREE.CircleGeometry(1, 24), std(0x2e1a0e));
+  const room = new THREE.Mesh(new THREE.CircleGeometry(1, 28), std(0x2e1a0e));
   room.rotation.x = -Math.PI / 2;
-  room.scale.set(0.34, 0.55, 1);
+  room.scale.set(0.34, 0.6, 1);
   room.position.y = 0.01;
   g.add(room);
-  const skin = std(0xc98a4a, { roughness: 0.35 });
-  g.add(ellipsoid(skin, 0.22, 0.15, 0.42, V(0, 0.14, 0)));
-  if (species === 'kabuto') g.add(cone(skin, V(0, 0.2, 0.28), V(0, 0.24, 0.62), 0.05));
-  else if (species !== 'kanabun' && BEETLE_STYLE[species]) {
-    for (const s of [-1, 1]) g.add(cone(skin, V(s * 0.06, 0.14, 0.36), V(s * 0.04, 0.15, 0.56), 0.035));
+  const skin = shiny(0xb4682a, { roughness: 0.35, clearcoat: 0.7 });
+  const fold = shiny(0x9a5522, { roughness: 0.4 });
+  // おなか（ふしが ならぶ）
+  for (let i = 0; i < 6; i++) {
+    const w = 0.2 - i * 0.022;
+    g.add(ellipsoid(skin, w, w * 0.78, 0.06, V(0, 0.13, -0.04 - i * 0.065)));
+  }
+  g.add(ellipsoid(skin, 0.22, 0.16, 0.2, V(0, 0.15, 0.1)));        // むね
+  g.add(ellipsoid(skin, 0.12, 0.1, 0.1, V(0, 0.14, 0.3)));         // あたま
+  for (const s of [-1, 1]) {
+    const pad = ellipsoid(fold, 0.05, 0.08, 0.2, V(s * 0.17, 0.12, 0.0));    // たたまれた はね
+    pad.rotation.y = s * 0.15;
+    g.add(pad);
+    for (const [z0, z1] of [[0.22, 0.05], [0.17, -0.02], [0.12, -0.1]]) {   // たたまれた あし
+      g.add(rod(fold, V(s * 0.09, 0.03, z0), V(s * 0.05, 0.03, z1), 0.018, 0.012));
+    }
+  }
+  if (species === 'kabuto') {
+    g.add(taper(fold, [V(0, 0.17, 0.36), V(0, 0.19, 0.46), V(0, 0.23, 0.53), V(0, 0.29, 0.57)], 0.035, 0.018, 16));
+  } else if (BEETLE_STYLE[species] && BEETLE_STYLE[species].jaw) {
+    for (const s of [-1, 1]) g.add(taper(fold, [V(s * 0.05, 0.12, 0.36), V(s * 0.07, 0.12, 0.46), V(s * 0.03, 0.12, 0.54)], 0.035, 0.012, 10));
   }
   return { group: g, legs: [] };
 }
 
+function buildModel(p) {
+  if (p.stage === 'larva') return buildLarva();
+  if (p.stage === 'pupa') return buildPupa(p.species);
+  if (p.species === 'ant') return buildAnt();
+  if (p.species === 'dango') return buildDango();
+  return buildBeetle(p.species, p.sizeRatio ?? 0.5);
+}
+
+// ずかん よう：1ぴきを くるくる まわして みせる
+export function createModelViewer(container, { species, stage = 'adult', sizeRatio = 0.7 }) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  container.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a6a4a, 0.5));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+  sun.position.set(2, 4, 3);
+  scene.add(sun);
+  const model = buildModel({ species, stage, sizeRatio });
+  const box = new THREE.Box3().setFromObject(model.group);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3()).length();
+  const turn = new THREE.Group();
+  model.group.position.sub(center);
+  turn.add(model.group);
+  scene.add(turn);
+  const camera = new THREE.PerspectiveCamera(24, 1, 0.01, 50);
+  camera.position.set(size * 1.25, size * 0.75, size * 1.4);
+  camera.lookAt(0, 0, 0);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enablePan = false;
+  controls.enableDamping = true;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 2.5;
+  const resize = () => {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+  const ro = new ResizeObserver(resize);
+  ro.observe(container);
+  resize();
+  const clock = new THREE.Clock();
+  let raf = 0;
+  const loop = () => {
+    raf = requestAnimationFrame(loop);
+    if (model.anim) model.anim(clock.getElapsedTime());
+    controls.update();
+    renderer.render(scene, camera);
+  };
+  loop();
+  return {
+    renderOnce: () => renderer.render(scene, camera),
+    dispose() {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      controls.dispose();
+      pmrem.dispose();
+      renderer.dispose();
+      renderer.domElement.remove();
+    },
+  };
+}
 // ---------- ケース ----------
 
 // つちの あつさ（cm）。ようちゅう・さなぎは つちの なかの ガラスぎわに いて、よこから みえる
@@ -366,9 +710,15 @@ export function createInsectRoom(container, { onSelect }) {
   container.appendChild(renderer.domElement);
   renderer.domElement.style.touchAction = 'none';
 
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a6a4a, 1.1));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+  // まわりの けしきが からだに うつりこむ（つやつや）
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a6a4a, 0.55));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.3);
   sun.position.set(8, 20, 12);
   scene.add(sun);
 
@@ -389,7 +739,16 @@ export function createInsectRoom(container, { onSelect }) {
   ring.rotation.x = -Math.PI / 2;
   ring.visible = false;
   scene.add(ring);
-  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false });
+  // ふちが ぼやけた かげ
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = shadowCanvas.height = 64;
+  const sctx = shadowCanvas.getContext('2d');
+  const grad = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  sctx.fillStyle = grad;
+  sctx.fillRect(0, 0, 64, 64);
+  const shadowMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false });
 
   // decor：[{ type, slot }]、slots：おける かず
   function setCase(dims, decor = [], slots = 2) {
@@ -438,18 +797,11 @@ export function createInsectRoom(container, { onSelect }) {
     return V((Math.random() * 2 - 1) * bounds.x, 0, (Math.random() * 2 - 1) * bounds.z * 0.4 + bounds.z * 0.45);
   }
 
-  function build(p) {
-    if (p.stage === 'larva') return buildLarva();
-    if (p.stage === 'pupa') return buildPupa(p.species);
-    if (p.species === 'ant') return buildAnt();
-    if (p.species === 'dango') return buildDango();
-    return buildBeetle(p.species, p.sizeRatio ?? 0.5);
-  }
 
   const keyOf = (p) => `${p.stage}/${p.lengthCm.toFixed(2)}/${p.weak}/${p.sleeping}`;
 
   function addActor(p) {
-    const model = build(p);
+    const model = buildModel(p);
     const g = model.group;
     const len = p.lengthCm;
     g.rotation.order = 'YXZ';
@@ -459,7 +811,11 @@ export function createInsectRoom(container, { onSelect }) {
     // ようちゅう・さなぎ・とうみんちゅうは つちの なか、まえの ガラスぎわ（よこから みえる）
     const [cw, cd] = caseDims;
     const underX = (Math.random() * 2 - 1) * (cw / 2 - len);
-    const underY = -SOIL * (0.3 + Math.random() * 0.35);
+    // からだ ぜんぶが つちの なかに おさまる ふかさ
+    const half = (p.stage === 'pupa' ? 0.55 : 0.45) * len;
+    const top = -half - 0.3;
+    const bottom = -SOIL + half + 0.2;
+    const underY = bottom < top ? bottom + Math.random() * (top - bottom) : -SOIL / 2;
     if (p.stage === 'larva') {
       g.rotation.order = 'XYZ';
       g.rotation.set(Math.PI / 2, 0, 0); // C のかたちを ガラスに むける
@@ -474,7 +830,7 @@ export function createInsectRoom(container, { onSelect }) {
     }
     g.traverse((o) => (o.userData.petId = p.id));
     scene.add(g);
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(len * 0.45, 20), shadowMat);
+    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(len * 0.9, len * 1.1), shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.02;
     scene.add(shadow);
@@ -692,6 +1048,7 @@ export function createInsectRoom(container, { onSelect }) {
 
   function step(a, dt, t) {
     const g = a.g;
+    if (a.model.anim && !a.pet.sleeping) a.model.anim(t);
     if (!a.walker) {
       // ようちゅうは くねくね、さなぎは ときどき ぴくっ、とうみんは じっと
       if (a.pet.stage === 'larva') g.rotation.y += Math.sin(t * 1.5 + a.phase) * 0.004;
@@ -736,6 +1093,7 @@ export function createInsectRoom(container, { onSelect }) {
     if (a.shadow.visible) a.shadow.position.y = groundHeight(logShape, g.position.x, g.position.z) + 0.02;
     a.shadow.position.x = g.position.x;
     a.shadow.position.z = g.position.z;
+    a.shadow.rotation.z = g.rotation.y;
   }
 
   const clock = new THREE.Clock();
@@ -756,6 +1114,7 @@ export function createInsectRoom(container, { onSelect }) {
     cancelAnimationFrame(raf);
     ro.disconnect();
     controls.dispose();
+    pmrem.dispose();
     renderer.dispose();
     renderer.domElement.remove();
   }
@@ -775,5 +1134,22 @@ export function createInsectRoom(container, { onSelect }) {
     }
   };
 
-  return { setCase, setPets, select, dispose, debug, advance };
+  // たしかめ よう：カメラを むしの ちかくに よせる
+  const lookAt = (id, dist = 3, dir = [1, 0.7, 1.2]) => {
+    const a = actors.get(id);
+    if (!a) return;
+    const p = a.g.position.clone();
+    controls.target.copy(p);
+    camera.position.copy(p).add(V(...dir).normalize().multiplyScalar(a.len * dist));
+    controls.minDistance = 0.5;
+    controls.update();
+  };
+
+  // たしかめ よう：いまの がめんを がぞうに
+  const snapshot = () => {
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL('image/jpeg', 0.85);
+  };
+
+  return { setCase, setPets, select, dispose, debug, advance, lookAt, snapshot };
 }
