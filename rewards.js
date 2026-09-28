@@ -30,8 +30,8 @@ function pointRuleFor(level) {
   const id = level.id;
   if (id === 'ta-random') return { net: true, perfect: 0, name: 'せいかい − まちがい' };
   if (id === 'ta-order') return { per: 1, perfect: 0 };
-  if (/^j2a?h-/.test(id)) return { per: 3, perfect: 10 };            // じゅけんの どだい チャレンジ
-  if (/^j2a?-|^j2-/.test(id)) return { per: 2, perfect: 10 };         // じゅけんの どだい
+  if (/^j\da?h-/.test(id)) return { per: 3, perfect: 10 };           // じゅけんの どだい チャレンジ
+  if (/^j\d/.test(id)) return { per: 2, perfect: 10 };                // じゅけんの どだい（1年・2年）
   if (level.type === 'mul2' || level.type === 'addn') return { per: 2, perfect: 5 };
   if (level.type === 'mul') {
     const dan = Number((id.match(/^mul(\d)$/) || [])[1]);

@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v26';
+const VERSION = 'v27';
 const FILES = [
   './',
   'index.html',
@@ -22,6 +22,8 @@ const FILES = [
   'zenhan1.js',
   'zenhan2.js',
   'zenhan3.js',
+  'ichinen1.js',
+  'ichinen2.js',
   'app.js',
   'timeattack.js',
   'flatroom.js',
