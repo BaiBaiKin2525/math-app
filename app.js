@@ -178,19 +178,47 @@ function renderEarned(result) {
     ${result.capped ? '<div class="earned-cap">きょうの べんきょう ポイントは じょうげん まで もらったよ。あしたも がんばろう！</div>' : ''}`;
 }
 
+// ひらいている 大こうもく（この タブレットの なかだけで おぼえる）
+const OPEN_GROUPS_KEY = 'mathapp.v1.openGroups';
+function loadOpenGroups() {
+  try {
+    return JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+function saveOpenGroups(list) {
+  try {
+    localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(list));
+  } catch {
+    // おぼえられなくても うごく
+  }
+}
+
 function renderHome() {
   if (!currentProfile()) return renderWho();
+  if (state.level && UNITS[state.level.type]) disposeView();
   clearInterval(state.timerId);
   state.countToken++;
   renderHomeBar();
   const root = $('level-groups');
   root.innerHTML = '';
   const groups = [...new Set(LEVELS.map((l) => l.group))];
+  const open = loadOpenGroups();
   for (const g of groups) {
-    const title = document.createElement('div');
-    title.className = 'group-title';
-    title.innerHTML = `${GROUP_ICONS[g] || ''} ${LEVELS.find((l) => l.group === g).groupHtml || g}`;
+    // 大こうもくを タップすると 小こうもくが ひらく
+    const levels = LEVELS.filter((l) => l.group === g);
+    const title = document.createElement('button');
+    title.className = 'group-title' + (open.includes(g) ? ' open' : '');
+    title.innerHTML = `<span class="gt-name">${GROUP_ICONS[g] || ''} ${levels[0].groupHtml || g}</span>
+      <span class="gt-count">${levels.length}</span><span class="gt-arrow">▶</span>`;
+    title.addEventListener('click', () => {
+      const now = loadOpenGroups();
+      saveOpenGroups(now.includes(g) ? now.filter((x) => x !== g) : [...now, g]);
+      renderHome();
+    });
     root.appendChild(title);
+    if (!open.includes(g)) continue;
 
     const grid = document.createElement('div');
     grid.className = 'level-grid';
@@ -223,6 +251,7 @@ function renderHome() {
 // ---------- もんだいの ステップ ----------
 
 function buildSteps(type, q) {
+  if (UNITS[type]) return UNITS[type].steps(q);
   const { a, b } = q;
   switch (type) {
     case 'add':
@@ -301,9 +330,12 @@ function mountVisual() {
   const box = $('visual');
   const type = state.level.type;
   const q = current();
+  disposeView();
   box.innerHTML = '';
   box.classList.toggle('hidden', state.hideVisual && canHide(type));
-  if (type === 'add' || type === 'sub') {
+  if (UNITS[type]) {
+    state.view = UNITS[type].view(box, q, unitApi);
+  } else if (type === 'add' || type === 'sub') {
     state.view = createTileView(box, type, q, { onRemoveDone });
   } else if (type === 'addn') {
     state.view = createPlaceValueView(box, q, { tiles: state.level.tiles !== false });
@@ -317,6 +349,12 @@ function mountVisual() {
     state.view = createBoard(box, { ...size, split: type === 'mul2', onPick });
   }
   state.view.layout();
+}
+
+// 3D などを つかう え は つかいおわったら とめる
+function disposeView() {
+  if (state.view && state.view.dispose) state.view.dispose();
+  state.view = null;
 }
 
 const hasTiles = () => state.level.tiles !== false;
@@ -369,6 +407,8 @@ function enterStep() {
     view.selected = new Set();
     view.note = step.note || '';
   }
+  const unit = UNITS[state.level.type];
+  if (unit && unit.enter) unit.enter(view, step, q);
   // タイルを とる あいだは えを かくさない
   $('visual').classList.toggle('hidden',
     state.hideVisual && canHide(state.level.type) && step.kind !== 'remove');
@@ -380,7 +420,7 @@ function enterStep() {
   else if (step.place !== undefined) say(`${PLACE_NAMES[step.place]}の くらいを たそう`);
   else if (step.region !== undefined) say('ひかっている へやは いくつ？');
   else if (step.total) say('へやを ぜんぶ たすと？');
-  else say('');
+  else say(step.say || '');
 
   renderFormula();
   renderKeypad();
@@ -524,7 +564,11 @@ function renderFormula(answerColor) {
   el.className = `formula ${type}`;
   if (step && step.prompt) {
     el.classList.remove('long');
-    el.innerHTML = `<div class="formula-prompt">${step.prompt}</div>${step.kind === 'answer' ? `<div class="formula-line">${box}</div>` : ''}`;
+    // before：□の まえの しき、unit：□の あとの たんい（cm など）
+    const line = step.kind === 'answer'
+      ? `<div class="formula-line">${step.before ? `<span>${step.before}</span>` : ''}${box}${step.unit ? `<span class="unit">${step.unit}</span>` : ''}</div>`
+      : '';
+    el.innerHTML = `<div class="formula-prompt">${step.prompt}</div>${line}`;
     return;
   }
   if (step && step.formula) {
@@ -584,7 +628,22 @@ function renderKeypad(showNext) {
     pad.appendChild(next);
     return;
   }
-  const enabled = curStep() && curStep().kind === 'answer';
+  // えらぶ もんだい：テンキーの かわりに こたえの ボタン
+  const cur = curStep();
+  if (cur && cur.kind === 'choice') {
+    pad.classList.add('choices');
+    cur.options.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'key choice';
+      btn.innerHTML = opt.html || opt;
+      btn.dataset.i = i;
+      btn.addEventListener('click', () => checkChoice(i, btn));
+      pad.appendChild(btn);
+    });
+    return;
+  }
+  pad.classList.remove('choices');
+  const enabled = cur && cur.kind === 'answer';
   const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'del', '0', 'ok'];
   for (const k of keys) {
     const btn = document.createElement('button');
@@ -622,6 +681,74 @@ function resolvePlace(step, isLast) {
   else if (step.expected >= 10) say('10 こ あつまったので となりの くらいへ 1 くりあがり！');
 }
 
+// えらぶ もんだいの こたえあわせ（step.answer：せいかいの ばんごう）
+async function checkChoice(i, btn) {
+  const step = curStep();
+  if (state.locked || !step) return;
+  const view = state.view;
+  const unit = UNITS[state.level.type];
+  const isLast = state.stepIndex === state.steps.length - 1;
+  if (i === step.answer) {
+    state.locked = true;
+    btn.classList.add('right');
+    judge(true);
+    soundOk();
+    if (step.explain) say(step.explain);
+    if (unit && unit.after) await unit.after(view, step, true);
+    await sleep(isLast ? 900 : 700);
+    advanceStep();
+    return;
+  }
+  state.attempts++;
+  state.mistake = true;
+  soundNg();
+  btn.classList.add('wrong-choice');
+  btn.disabled = true;
+  if (state.attempts === 1 && step.options.length > 2) {
+    say(step.hint || 'おしい！もういちど かんがえて みよう', true);
+    return;
+  }
+  // こたえを みせる
+  judge(false);
+  state.locked = true;
+  $('keypad').querySelectorAll('.choice').forEach((b, k) => {
+    if (k === step.answer) b.classList.add('right');
+    b.disabled = true;
+  });
+  say(step.explain || `${rb('答', 'こた')}えは ${step.options[step.answer].html || step.options[step.answer]}`, true);
+  if (unit && unit.after) await unit.after(view, step, false);
+  const next = document.createElement('button');
+  next.className = 'key next';
+  next.textContent = 'つぎへ ▶';
+  next.addEventListener('click', () => {
+    state.countToken++;
+    advanceStep();
+  });
+  $('keypad').appendChild(next);
+}
+
+// ユニット（じゅけんの どだい など）が つかう きのう
+const unitApi = {
+  step: () => curStep(),
+  q: () => current(),
+  locked: () => state.locked,
+  say,
+  tick: () => soundTick(),
+  // ボタンいがいの そうさ（タップ・ドラッグ）で せいかい した とき
+  correct(msg) {
+    state.locked = true;
+    judge(true);
+    soundOk();
+    if (msg) say(msg);
+    setTimeout(advanceStep, 900);
+  },
+  wrong(msg) {
+    state.mistake = true;
+    soundNg();
+    if (msg) say(msg, true);
+  },
+};
+
 function hintText() {
   const type = state.level.type;
   if (type === 'add') return 'おしい！「がっちゃん」や「かぞえる」で たしかめよう';
@@ -643,6 +770,15 @@ async function checkAnswer() {
 
   if (Number(state.input) === step.expected) {
     state.locked = true;
+    const unit = UNITS[state.level.type];
+    if (unit && unit.after) {
+      judge(true);
+      soundOk();
+      await unit.after(view, step, true);
+      await sleep(isLast ? 850 : 650);
+      advanceStep();
+      return;
+    }
     if (step.region !== undefined) {
       view.answered.add(step.region);
       view.draw();
@@ -678,7 +814,9 @@ async function checkAnswer() {
   state.input = String(step.expected);
   renderFormula('var(--red)');
   renderKeypad(true);
-  say(`こたえは ${step.expected}`, true);
+  say(`${rb('答', 'こた')}えは ${step.expected}`, true);
+  const unitAfter = UNITS[state.level.type] && UNITS[state.level.type].after;
+  if (unitAfter) unitAfter(view, step, false);
   if (step.region !== undefined) {
     view.answered.add(step.region);
     view.draw();

@@ -1,5 +1,11 @@
 // 問題の生成。レベルを足すときはここに追加する。
 
+// ユニットの とうろく：UNITS[type] = { questions(), steps(q), view(box, q, api), enter?(view, step, q), after?(view, step, ok) }
+const UNITS = {};
+
+// ふりがなつきの かんじ（よみながら おぼえる）
+const rb = (kanji, yomi) => `<ruby>${kanji}<rt>${yomi}</rt></ruby>`;
+
 function rand(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
@@ -149,6 +155,36 @@ const LEVELS = [
     id: 'j2-kufu', type: 'kufu', group: 'じゅけんの どだい（2年）',
     title: '② くふうしよう', desc: '<ruby>計算<rt>けいさん</rt></ruby>の くふう（10の まとまり など）',
     make: () => kufuQuestions(),
+  },
+  {
+    id: 'j2-nagasa', type: 'nagasa', group: 'じゅけんの どだい（2年）',
+    title: '③ <ruby>長<rt>なが</rt></ruby>さを はかろう', desc: 'ものさしで はかる・cm mm m',
+    make: () => UNITS.nagasa.questions(),
+  },
+  {
+    id: 'j2-junjo', type: 'junjo', group: 'じゅけんの どだい（2年）',
+    title: '④ じゅんじょよく <ruby>考<rt>かんが</rt></ruby>える', desc: 'もれなく <ruby>書<rt>か</rt></ruby>き<ruby>出<rt>だ</rt></ruby>す（<ruby>何通<rt>なんとお</rt></ruby>り？）',
+    make: () => UNITS.junjo.questions(),
+  },
+  {
+    id: 'j2-pazuru', type: 'pazuru', group: 'じゅけんの どだい（2年）',
+    title: '⑤ パズルを <ruby>作<rt>つく</rt></ruby>ろう！', desc: 'いたを しきつめる',
+    make: () => UNITS.pazuru.questions(),
+  },
+  {
+    id: 'j2-suiri', type: 'suiri', group: 'じゅけんの どだい（2年）',
+    title: '⑥ すいりしよう', desc: 'ヒントから <ruby>答<rt>こた</rt></ruby>えを きめる',
+    make: () => UNITS.suiri.questions(),
+  },
+  {
+    id: 'j2-kakezan', type: 'kakezan', group: 'じゅけんの どだい（2年）',
+    title: '⑦ かけ<ruby>算<rt>ざん</rt></ruby>を <ruby>考<rt>かんが</rt></ruby>えよう', desc: 'かけ<ruby>算<rt>ざん</rt></ruby>の <ruby>文<rt>ぶん</rt></ruby>しょうだい',
+    make: () => UNITS.kakezan.questions(),
+  },
+  {
+    id: 'j2-tenkai', type: 'tenkai', group: 'じゅけんの どだい（2年）',
+    title: '⑧ <ruby>立方体<rt>りっぽうたい</rt></ruby>の てんかい<ruby>図<rt>ず</rt></ruby>', desc: '<ruby>組<rt>く</rt></ruby>み<ruby>立<rt>た</rt></ruby>てると どうなる？（3D）',
+    make: () => UNITS.tenkai.questions(),
   },
   {
     id: 'free9', type: 'free', group: 'タイルで あそぶ',

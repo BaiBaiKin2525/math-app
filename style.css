@@ -888,3 +888,95 @@ ruby rt { font-size: .5em; font-weight: normal; }
 .kufu-chip.wrong { animation: shake .4s; border-color: var(--red); }
 .kufu-note { margin-top: 20px; font-size: clamp(22px, 3vw, 32px); color: var(--ink); text-align: center; }
 .kufu-note b { color: var(--green); }
+/* ホーム：大こうもく（タップで ひらく） */
+button.group-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 16px 20px;
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 24px;
+  font-weight: bold;
+  text-align: left;
+  box-shadow: 0 4px 0 var(--line);
+}
+button.group-title:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--line); }
+button.group-title.open { border-color: var(--orange); background: #fff6ee; }
+.gt-name { flex: 1; }
+.gt-count { font-size: 16px; color: var(--sub); background: #f3ece4; border-radius: 999px; padding: 2px 10px; font-weight: normal; }
+.gt-arrow { color: var(--sub); transition: transform .2s; }
+button.group-title.open .gt-arrow { transform: rotate(90deg); color: var(--orange); }
+button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; border-left: 4px solid #ffd9bd; }
+/* えらぶ もんだい */
+.keypad.choices { grid-template-columns: 1fr; }
+.key.choice { height: auto; min-height: 64px; padding: 12px; font-size: 24px; }
+.key.choice.right { background: var(--green); border-color: var(--green); color: #fff; }
+.key.choice.wrong-choice { background: #ffe0e0; border-color: var(--red); opacity: .6; }
+.formula-line .unit { font-size: .6em; color: var(--sub); }
+.color-dot { display: inline-block; width: 22px; height: 22px; border-radius: 50%; margin-right: 8px; vertical-align: -3px; border: 2px solid rgba(0,0,0,.2); }
+
+/* ③ ものさし */
+.ruler-svg { touch-action: none; overflow: hidden; }
+.ruler-body { fill: #fff6d6; stroke: #c9a24a; stroke-width: 2; }
+.ruler-g.draggable { cursor: grab; }
+.ruler-tick { stroke: #5a4a2a; stroke-width: 1.2; }
+.ruler-num { font-size: 15px; font-weight: bold; text-anchor: middle; fill: #5a4a2a; }
+.ruler-unit { font-size: 13px; fill: #5a4a2a; }
+.ruler-guide { stroke: rgba(255, 90, 90, .5); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.meter-wrap { width: 90%; display: flex; flex-direction: column; gap: 10px; }
+.meter-bar { height: 46px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: #fff; min-width: 70px; }
+.meter-bar.full { background: var(--blue); width: 100%; background-image: repeating-linear-gradient(to right, transparent 0 calc(10% - 2px), rgba(255,255,255,.5) calc(10% - 2px) 10%); }
+.meter-bar.part { background: var(--orange); }
+
+/* ④ じゅんじょよく */
+.jj-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
+.jj-cards, .jj-slots { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.jj-card { width: 64px; height: 76px; border-radius: 12px; background: #fff; border: 3px solid var(--blue); font-size: 36px; font-weight: bold; box-shadow: 0 4px 0 #bcd6ff; }
+.jj-card.fruit { font-size: 40px; }
+.jj-card.used, .jj-card:disabled { opacity: .35; }
+.jj-slot { width: 64px; height: 76px; border-radius: 12px; border: 3px dashed var(--orange); background: #fff8ee; font-size: 36px; font-weight: bold; }
+.jj-hint { margin-left: 12px; }
+.jj-found { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.jj-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.jj-item { background: #e7f6ea; border: 2px solid #9fd9ae; border-radius: 8px; padding: 2px 10px; font-size: 22px; font-weight: bold; }
+
+/* ⑤ パズル */
+.pz-wrap { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+.pz-board { display: grid; gap: 2px; }
+.pz-cell { width: var(--c); height: var(--c); background: #f3ece4; border: 2px solid #d9cbbd; border-radius: 4px; padding: 0; }
+.pz-cell.out { visibility: hidden; }
+.pz-cell.filled { border-color: rgba(0,0,0,.25); }
+.pz-tray { display: flex; flex-wrap: wrap; gap: 10px; max-width: calc(var(--c) * 5); align-items: flex-start; }
+.pz-piece { display: grid; gap: 2px; padding: 6px; background: #fff; border: 3px solid var(--line); border-radius: 10px; }
+.pz-piece.selected { border-color: var(--orange); transform: translateY(-3px); box-shadow: 0 4px 0 #ffd9bd; }
+.pz-piece span { width: calc(var(--c) * .55); height: calc(var(--c) * .55); border-radius: 3px; }
+.pz-piece span.empty { background: transparent; }
+.pz-piece span { display: flex; align-items: center; justify-content: center; }
+.pz-piece span.anchor::after { content: '●'; color: #fff; font-size: calc(var(--c) * .32); line-height: 1; }
+.pz-tools { display: flex; gap: 8px; width: 100%; }
+
+/* ⑥ すいり */
+.sr-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.sr-title { font-weight: bold; color: var(--orange); font-size: 20px; }
+.sr-clues { margin: 0; padding-left: 1.6em; font-size: 22px; line-height: 1.7; }
+.sr-grid { display: grid; grid-template-columns: auto repeat(3, 64px); gap: 4px; align-items: center; margin-top: 8px; }
+.sr-head { text-align: center; font-size: 16px; font-weight: bold; padding: 0 6px; }
+.sr-cell { width: 64px; height: 56px; border: 2px solid var(--line); border-radius: 8px; background: #fff; font-size: 30px; font-weight: bold; color: var(--red); }
+
+/* ⑦ かけざん */
+.kz-wrap { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.kz-group { position: relative; padding: 16px 10px 8px; border: 3px solid #bcd6ff; border-radius: 16px; background: #f2f7ff; font-size: 26px; max-width: 170px; line-height: 1.2; word-break: break-all; }
+.kz-group.row { border-color: #d9cbbd; background: #faf5ee; max-width: none; }
+.kz-group.rest { border-style: dashed; border-color: var(--orange); background: #fff8ee; }
+.kz-tag { position: absolute; top: -12px; left: 8px; background: #fff; border-radius: 999px; padding: 0 8px; font-size: 13px; color: var(--sub); border: 1px solid var(--line); }
+
+/* ⑧ てんかい図 */
+.net-3d { width: 100%; height: 100%; min-height: 260px; touch-action: none; }
+.net-3d canvas { display: block; }
+.net-flat { display: grid; gap: 2px; }
+.net-flat span { width: 56px; height: 56px; }
+.net-face { border: 2px solid rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 30px; }

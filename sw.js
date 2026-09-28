@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v16';
+const VERSION = 'v18';
 const FILES = [
   './',
   'index.html',
@@ -11,6 +11,13 @@ const FILES = [
   'placevalue.js',
   'kukuhyo.js',
   'kufu.js',
+  'nagasa.js',
+  'junjo.js',
+  'pazuru.js',
+  'suiri.js',
+  'kakezan.js',
+  'tenkai.js',
+  'net3d.js',
   'app.js',
   'timeattack.js',
   'flatroom.js',
