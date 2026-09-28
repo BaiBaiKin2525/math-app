@@ -138,6 +138,13 @@ const LEVELS = [
     title: '2けた × 2けた', desc: '23 × 14 など。4つの へやに わける',
     make: () => generate(QUESTIONS_PER_SET, () => ({ a: twoDigit(11, 29), b: twoDigit(11, 29) })),
   },
+  // じゅけんの どだい（2年）：SAPIX 2年「9〜1月」の じゅんばんに あわせる
+  {
+    id: 'j2-kuku', type: 'kukuhyo', group: 'じゅけんの どだい（2年）',
+    groupHtml: '<ruby>受験<rt>じゅけん</rt></ruby>の <ruby>土台<rt>どだい</rt></ruby>（2<ruby>年<rt>ねん</rt></ruby>）',
+    title: '① <ruby>九九<rt>くく</rt></ruby>を さがそう', desc: '<ruby>九九<rt>くく</rt></ruby>の <ruby>表<rt>ひょう</rt></ruby>の きまりを <ruby>見<rt>み</rt></ruby>つける',
+    make: () => kukuQuestions(),
+  },
   {
     id: 'free9', type: 'free', group: 'タイルで あそぶ',
     title: 'タイル くくひょう', desc: 'めもりを うごかして みよう',

@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v14';
+const VERSION = 'v15';
 const FILES = [
   './',
   'index.html',
@@ -9,6 +9,7 @@ const FILES = [
   'tiles.js',
   'board.js',
   'placevalue.js',
+  'kukuhyo.js',
   'app.js',
   'timeattack.js',
   'flatroom.js',

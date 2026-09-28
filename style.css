@@ -829,3 +829,41 @@ h1 {
 .z-stages { display: flex; gap: 6px; margin-bottom: 6px; }
 .z-stage { flex: 1; background: var(--card); border: 2px solid var(--line); border-radius: 10px; padding: 6px; font-size: 16px; }
 .z-stage.active { border-color: #3cb46e; background: #e7f6ea; font-weight: bold; }
+/* ---------- じゅけんの どだい ---------- */
+ruby rt { font-size: .5em; font-weight: normal; }
+.formula-prompt {
+  font-size: clamp(20px, 2.6vw, 28px);
+  line-height: 1.9;
+  text-align: center;
+  white-space: normal;
+  max-width: 34em;
+}
+.formula-prompt b { color: var(--orange); font-size: 1.2em; }
+.formula-prompt small { display: block; font-size: .7em; color: var(--sub); line-height: 1.6; }
+.formula:has(.formula-prompt) .formula-line { font-size: clamp(40px, 6vw, 60px); }
+.level-card .d ruby rt { font-size: .6em; }
+
+/* 九九の ひょう */
+.kuku-table { display: grid; grid-template-columns: repeat(10, var(--c)); gap: 2px; }
+.kuku-table > * {
+  width: var(--c);
+  height: var(--c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--c) * .42);
+  font-weight: bold;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.kk-corner { color: var(--sub); }
+.kk-head { background: #ffe3cf; color: var(--orange); }
+.kk-head.row-on { background: var(--orange); color: #fff; }
+.kk-cell { background: #f7f2ea; color: var(--ink); border: none; padding: 0; }
+.kk-cell.row-on { background: #fff1c2; }
+.kk-cell.found { background: var(--green); color: #fff; }
+.kk-cell.marked { box-shadow: inset 0 0 0 3px var(--blue); }
+.kk-cell.mark { background: var(--orange); color: #fff; }
+.kk-cell.active { background: #fff; color: var(--orange); box-shadow: inset 0 0 0 3px var(--orange); animation: glowcell 1.2s ease-in-out infinite; }
+@keyframes glowcell { 50% { box-shadow: inset 0 0 0 5px var(--orange); } }
+.kk-cell.wrong { animation: shake .4s; background: #ffd6d6; }

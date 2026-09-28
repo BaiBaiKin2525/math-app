@@ -6,7 +6,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const HISTORY_KEY = 'mathapp.v1.history';
 const MAX_DIGITS = 4;
-const OPS = { add: '+', sub: '−', mul: '×', mul2: '×', addn: '+' };
+const OPS = { add: '+', sub: '−', mul: '×', mul2: '×', addn: '+', kukuhyo: '' };
 
 const state = {
   level: null,
@@ -109,6 +109,7 @@ const GROUP_ICONS = {
   'くく タイムアタック': '⏱️',
   '2けたの かけざん': '🔢',
   'タイルで あそぶ': '🧩',
+  'じゅけんの どだい（2年）': '🎓',
 };
 
 // ---------- だれが やる？ ----------
@@ -188,7 +189,7 @@ function renderHome() {
   for (const g of groups) {
     const title = document.createElement('div');
     title.className = 'group-title';
-    title.textContent = `${GROUP_ICONS[g] || ''} ${g}`;
+    title.innerHTML = `${GROUP_ICONS[g] || ''} ${LEVELS.find((l) => l.group === g).groupHtml || g}`;
     root.appendChild(title);
 
     const grid = document.createElement('div');
@@ -230,6 +231,8 @@ function buildSteps(type, q) {
       return [{ kind: 'remove' }, { kind: 'answer', expected: a - b }];
     case 'mul':
       return [{ kind: 'pick-x' }, { kind: 'pick-y' }, { kind: 'answer', expected: a * b }];
+    case 'kukuhyo':
+      return kukuSteps(q);
     case 'addn':
       // いちの くらいから じゅんに。くりあがりが あれば 「1 + 4 + 3」の ように たす
       return addColumns(a, b).filter((c) => !c.auto).map((c) => ({
@@ -302,6 +305,8 @@ function mountVisual() {
     state.view = createTileView(box, type, q, { onRemoveDone });
   } else if (type === 'addn') {
     state.view = createPlaceValueView(box, q, { tiles: state.level.tiles !== false });
+  } else if (type === 'kukuhyo') {
+    state.view = createKukuTable(box, { onTap: kukuTap });
   } else {
     const up = (v) => Math.max(10, Math.min(100, Math.ceil((v + 1) / 10) * 10));
     const size = type === 'mul' ? { xMax: 10, yMax: 10 } : { xMax: up(q.a), yMax: up(q.b) };
@@ -345,6 +350,16 @@ function enterStep() {
   }
   if (step.kind === 'remove') view.locked = false;
   if (step.place !== undefined) view.active = step.place;
+  if (state.level.type === 'kukuhyo') {
+    view.mode = step.kind === 'find' ? 'find' : step.markable ? 'mark' : 'none';
+    view.found = new Set();
+    view.marked = new Set();
+    view.reveal = [];
+    view.mark = step.mark || [];
+    view.hidden = step.hidden || [];
+    view.active = step.cell || null;
+    view.rows = step.rows || [];
+  }
   // タイルを とる あいだは えを かくさない
   $('visual').classList.toggle('hidden',
     state.hideVisual && canHide(state.level.type) && step.kind !== 'remove');
@@ -352,6 +367,7 @@ function enterStep() {
   if (step.kind === 'pick-x') say(`よこの めもりを なぞって 「${q.a}」を えらぼう 👉`);
   else if (step.kind === 'pick-y') say(`たての めもりを なぞって 「${q.b}」を えらぼう 👇`);
   else if (step.kind === 'remove') say(`タイルを タップして ${q.b}こ とろう`);
+  else if (step.kind === 'find') say(`${step.targets.length > 1 ? `ぜんぶで ${step.targets.length}か${rb('所', 'しょ')} あるよ` : 'タップしてね'}`);
   else if (step.place !== undefined) say(`${PLACE_NAMES[step.place]}の くらいを たそう`);
   else if (step.region !== undefined) say('ひかっている へやは いくつ？');
   else if (step.total) say('へやを ぜんぶ たすと？');
@@ -404,6 +420,41 @@ function onPick(axis, value) {
   say(`${value} じゃ なくて ${expected} だよ。もういちど`, true);
 }
 
+// 九九の ひょうの マスを タップした とき
+function kukuTap(a, b) {
+  const step = curStep();
+  const view = state.view;
+  const key = `${a}x${b}`;
+  if (state.locked || !step) return;
+  if (view.mode === 'mark') {
+    if (view.marked.has(key)) view.marked.delete(key);
+    else view.marked.add(key);
+    soundTick();
+    view.draw();
+    return;
+  }
+  if (view.mode !== 'find' || view.found.has(key)) return;
+  if (step.targets.includes(key)) {
+    view.found.add(key);
+    beep([[880, 0.08]]);
+    view.draw();
+    const left = step.targets.length - view.found.size;
+    if (left > 0) {
+      say(`あたり！ あと ${left}か${rb('所', 'しょ')}`);
+      return;
+    }
+    state.locked = true;
+    judge(true);
+    soundOk();
+    setTimeout(advanceStep, 900);
+    return;
+  }
+  state.mistake = true;
+  soundNg();
+  view.flash(key);
+  say(`${a}×${b} は ${a * b} だよ`, true);
+}
+
 // ひきざんで タイルを とりおわった とき
 async function onRemoveDone() {
   await sleep(400);
@@ -430,6 +481,11 @@ function renderFormula(answerColor) {
   const box = `<span class="answer-box" id="answer-box"${style}>${step && step.kind === 'answer' ? state.input : ''}</span>`;
   const el = $('formula');
   el.className = `formula ${type}`;
+  if (step && step.prompt) {
+    el.classList.remove('long');
+    el.innerHTML = `<div class="formula-prompt">${step.prompt}</div>${step.kind === 'answer' ? `<div class="formula-line">${box}</div>` : ''}`;
+    return;
+  }
   if (step && step.formula) {
     el.classList.toggle('long', step.formula.length > 8);
     el.innerHTML = `
@@ -591,7 +647,11 @@ async function checkAnswer() {
     say(`こたえは ${step.expected}`, true);
     return;
   }
-  if (state.level.type !== 'mul2') {
+  if (step.reveal) {
+    view.reveal = step.reveal;
+    view.draw();
+  }
+  if (state.level.type !== 'mul2' && state.level.type !== 'kukuhyo') {
     await sleep(700);
     countAlong();
   }
@@ -656,8 +716,8 @@ function finish() {
   $('result-mark').textContent = correct === total ? '💮' : correct >= total * 0.7 ? '⭐' : '👍';
   $('result-text').innerHTML = `${total}もん ちゅう ${correct}もん せいかい！<small>かかった じかん ${formatTime(ms)}</small>`;
   const op = OPS[state.level.type];
-  $('result-wrong').textContent = wrong.length
-    ? 'まちがえた もんだい： ' + wrong.map((r) => `${r.a} ${op} ${r.b}`).join('、 ')
+  $('result-wrong').innerHTML = wrong.length
+    ? 'まちがえた もんだい： ' + wrong.map((r) => r.label || `${r.a} ${op} ${r.b}`).join('、 ')
     : '';
   $('result-extra').innerHTML = '';
   renderEarned(awardSet({ correct, total, full: !state.isRetry }));
