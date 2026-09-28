@@ -110,6 +110,7 @@ const GROUP_ICONS = {
   '2けたの かけざん': '🔢',
   'タイルで あそぶ': '🧩',
   'じゅけんの どだい（2年）': '🎓',
+  'じゅけんの どだい チャレンジ（2年）': '🔥',
 };
 
 // ---------- だれが やる？ ----------
@@ -401,6 +402,7 @@ function enterStep() {
     view.hidden = step.hidden || [];
     view.active = step.cell || null;
     view.rows = step.rows || [];
+    view.hideHeads = !!step.hideHeads;
   }
   if (state.level.type === 'kufu') {
     view.mode = step.kind === 'pair' ? 'pair' : 'none';
@@ -517,7 +519,7 @@ function kufuTap(i) {
   const q = current();
   const [x, y] = [...view.selected];
   if (q.nums[x] + q.nums[y] === step.target) {
-    view.grouped = [x, y];
+    view.grouped = [...view.grouped, x, y];
     view.selected = new Set();
     view.draw();
     state.locked = true;
@@ -681,6 +683,21 @@ function resolvePlace(step, isLast) {
   else if (step.expected >= 10) say('10 こ あつまったので となりの くらいへ 1 くりあがり！');
 }
 
+// じぶんで「つぎへ」を おすまで まつ（3D を ゆびで まわして たしかめる ときなど）
+function showNextButton() {
+  const pad = $('keypad');
+  pad.querySelectorAll('.key:not(.choice)').forEach((b) => b.remove());
+  pad.querySelectorAll('.choice').forEach((b) => (b.disabled = true));
+  const next = document.createElement('button');
+  next.className = 'key next';
+  next.textContent = 'つぎへ ▶';
+  next.addEventListener('click', () => {
+    state.countToken++;
+    advanceStep();
+  });
+  pad.appendChild(next);
+}
+
 // えらぶ もんだいの こたえあわせ（step.answer：せいかいの ばんごう）
 async function checkChoice(i, btn) {
   const step = curStep();
@@ -695,6 +712,7 @@ async function checkChoice(i, btn) {
     soundOk();
     if (step.explain) say(step.explain);
     if (unit && unit.after) await unit.after(view, step, true);
+    if (step.waitNext) return showNextButton();
     await sleep(isLast ? 900 : 700);
     advanceStep();
     return;
@@ -775,6 +793,7 @@ async function checkAnswer() {
       judge(true);
       soundOk();
       await unit.after(view, step, true);
+      if (step.waitNext) return showNextButton();
       await sleep(isLast ? 850 : 650);
       advanceStep();
       return;

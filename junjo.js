@@ -31,7 +31,18 @@ function combos(items, k) {
 }
 
 UNITS.junjo = {
-  questions() {
+  questions(opts = {}) {
+    if (opts.hard) {
+      // チャレンジ：おなじ カードが ある／4まい／3つ えらぶ
+      return shuffle([
+        { kind: 'perm', cards: [1, 1, 2], k: 3, label: `1・1・2 で 3けた` },
+        { kind: 'perm', cards: [2, 2, 5], k: 2, label: `2・2・5 で 2けた` },
+        { kind: 'perm', cards: [1, 2, 3, 4], k: 2, label: `4まいで 2けた` },
+        { kind: 'perm', cards: [0, 1, 2, 3], k: 2, label: `0・1・2・3 で 2けた` },
+        { kind: 'comb', items: shuffle(FRUITS).slice(0, 5), k: 2, label: `5つから 2つ` },
+        { kind: 'comb', items: shuffle(FRUITS).slice(0, 4), k: 3, label: `4つから 3つ` },
+      ]);
+    }
     return shuffle([
       { kind: 'perm', cards: [1, 2, 3], k: 3, label: `1・2・3 で 3けたの ${rb('数', 'かず')}` },
       { kind: 'perm', cards: shuffle([2, 5, 7]), k: 2, label: `3まいで 2けたの ${rb('数', 'かず')}` },

@@ -62,8 +62,41 @@ function netQuestion(wantValid) {
   }
 }
 
+// サイコロ：むかいあう 面の たしざんが 7 に なるように 1〜6 を おく
+function diceNumbers(cells) {
+  const { normals } = foldNet(cells);
+  const nums = Array(6).fill(0);
+  const pairs = shuffle([[1, 6], [2, 5], [3, 4]]);
+  let k = 0;
+  normals.forEach((n, i) => {
+    if (nums[i]) return;
+    const j = normals.findIndex((m) => m === n.split(',').map((x) => String(-Number(x))).join(','));
+    const [x, y] = Math.random() < 0.5 ? pairs[k] : [...pairs[k]].reverse();
+    nums[i] = x;
+    nums[j] = y;
+    k++;
+  });
+  return nums;
+}
+
 UNITS.tenkai = {
-  questions() {
+  questions(opts = {}) {
+    if (opts.hard) {
+      // チャレンジ：サイコロの てんかい図（むかいあう 面の 和は 7）
+      const qs = [];
+      for (const v of shuffle([true, false, false])) {
+        qs.push({ kind: 'isNet', cells: netQuestion(v), valid: v, label: `${rb('立方体', 'りっぽうたい')}に なる？` });
+      }
+      for (let i = 0; i < 3; i++) {
+        const cells = netQuestion(true);
+        qs.push({ kind: 'dice', cells, nums: diceNumbers(cells), hide: rand(0, 5), label: 'サイコロの ？' });
+      }
+      for (let i = 0; i < 2; i++) {
+        const cells = netQuestion(true);
+        qs.push({ kind: 'opposite', cells, colors: shuffle([...NET_COLORS.keys()]), mark: rand(0, 5), label: `むかいあう ${rb('面', 'めん')}` });
+      }
+      return shuffle(qs);
+    }
     const qs = [];
     for (const v of shuffle([true, true, false, false])) {
       qs.push({ kind: 'isNet', cells: netQuestion(v), valid: v, label: `${rb('立方体', 'りっぽうたい')}に なる？` });
@@ -78,8 +111,16 @@ UNITS.tenkai = {
 
   steps(q) {
     const 面 = rb('面', 'めん');
+    if (q.kind === 'dice') {
+      return [{
+        kind: 'answer', expected: q.nums[q.hide], waitNext: true,
+        prompt: `サイコロは むかいあう ${面}の ${rb('数', 'かず')}を たすと <b>7</b>。？に ${rb('入', 'はい')}る ${rb('数', 'かず')}は？`,
+        say: `？と むかいあう ${面}を さがそう`,
+      }];
+    }
     if (q.kind === 'isNet') {
       return [{
+        waitNext: true,
         kind: 'choice', options: ['⭕ なる', '✖ ならない'], answer: q.valid ? 0 : 1,
         prompt: `この ${rb('展開図', 'てんかいず')}を ${rb('組', 'く')}み${rb('立', 'た')}てると、${rb('立方体', 'りっぽうたい')}に なる？`,
         say: `あたまの なかで おって みよう。${rb('答', 'こた')}えたら ${rb('組', 'く')}み${rb('立', 'た')}てて みせるよ`,
@@ -92,7 +133,7 @@ UNITS.tenkai = {
     const others = shuffle(q.colors.filter((c, i) => i !== q.mark && i !== opp)).slice(0, 3);
     const opts = shuffle([oppColor, ...others]);
     return [{
-      kind: 'choice',
+      kind: 'choice', waitNext: true,
       options: opts.map((ci) => ({ html: `<span class="color-dot" style="background:${NET_COLORS[ci].color}"></span>${NET_COLORS[ci].name}` })),
       answer: opts.indexOf(oppColor),
       prompt: `★の ${面}と むかいあう ${面}は ${rb('何色', 'なにいろ')}？`,
@@ -103,8 +144,11 @@ UNITS.tenkai = {
 
   view(box, q) {
     const view = { three: null };
-    const colors = q.kind === 'opposite' ? q.cells.map((_, i) => NET_COLORS[q.colors[i]].color) : q.cells.map(() => '#ffd9a8');
-    const marks = q.kind === 'opposite' ? [q.mark] : [];
+    const colors = q.kind === 'opposite' ? q.cells.map((_, i) => NET_COLORS[q.colors[i]].color)
+      : q.kind === 'dice' ? q.cells.map(() => '#fbf7ef') : q.cells.map(() => '#ffd9a8');
+    // 面に かく もじ：★ や サイコロの 数
+    const labels = q.kind === 'opposite' ? q.cells.map((_, i) => (i === q.mark ? '★' : ''))
+      : q.kind === 'dice' ? q.nums.map((n, i) => (i === q.hide ? '？' : String(n))) : q.cells.map(() => '');
     const { parent } = foldNet(q.cells);
     view.draw = () => {
       if (view.three || view.ready) return;
@@ -113,11 +157,11 @@ UNITS.tenkai = {
       view.ready = import('./net3d.js')
         .then((m) => {
           if (!box.contains(holder)) return;
-          view.three = m.createNetView(holder, { cells: q.cells, parent, colors, marks });
+          view.three = m.createNetView(holder, { cells: q.cells, parent, colors, labels });
         })
         .catch(() => {
           // 3D が つかえない ときは ひらいた ずだけ
-          box.innerHTML = netFlatHTML(q.cells, colors, marks);
+          box.innerHTML = netFlatHTML(q.cells, colors, labels);
         });
     };
     view.layout = () => {
@@ -128,6 +172,15 @@ UNITS.tenkai = {
       if (view.three) view.three.dispose();
       view.three = null;
     };
+    // ひらく／くみたてる ボタン
+    view.showTools = () => {
+      if (box.querySelector('.net-tools')) return;
+      const tools = document.createElement('div');
+      tools.className = 'net-tools';
+      tools.innerHTML = '<button class="small-btn" data-t="0">📂 ひらく</button><button class="small-btn" data-t="1">📦 くみたてる</button>';
+      tools.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => view.three && view.three.fold(Number(b.dataset.t), 1200)));
+      box.appendChild(tools);
+    };
     view.fold = async () => {
       await view.ready;
       if (view.three) await view.three.fold(1, 1800);
@@ -135,20 +188,23 @@ UNITS.tenkai = {
     return view;
   },
 
-  // こたえた あとに くみたてて みせる
-  after(view) {
-    return view.fold();
+  // こたえた あとに くみたてて みせる → ゆびで まわして たしかめる
+  async after(view, step, ok) {
+    await view.fold();
+    if (!view.three) return;
+    view.showTools();
+    if (ok) unitApi.say(`ゆびで まわして たしかめよう。できたら「つぎへ」`);
   },
 };
 
-function netFlatHTML(cells, colors, marks) {
+function netFlatHTML(cells, colors, labels) {
   const w = Math.max(...cells.map((c) => c[0])) + 1;
   const h = Math.max(...cells.map((c) => c[1])) + 1;
   let html = `<div class="net-flat" style="grid-template-columns:repeat(${w}, 56px)">`;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = cells.findIndex((c) => c[0] === x && c[1] === y);
-      html += i < 0 ? '<span></span>' : `<span class="net-face" style="background:${colors[i]}">${marks.includes(i) ? '★' : ''}</span>`;
+      html += i < 0 ? '<span></span>' : `<span class="net-face" style="background:${colors[i]}">${labels[i]}</span>`;
     }
   }
   return `${html}</div>`;

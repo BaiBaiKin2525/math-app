@@ -7,7 +7,26 @@ const BAR_COLORS = ['#ff8a3d', '#4d96ff', '#3cb46e', '#e2553f', '#9b6bd6'];
 const cmmm = (mm) => (mm % 10 ? `${Math.floor(mm / 10)}cm${mm % 10}mm` : `${mm / 10}cm`);
 
 UNITS.nagasa = {
-  questions() {
+  questions(opts = {}) {
+    if (opts.hard) {
+      // チャレンジ：ものさしは うごかせない（はしが 0 では ない）、ひきざん、0 の はいる m・cm
+      const qs = [];
+      for (let i = 0; i < 3; i++) {
+        const len = rand(22, 95);
+        qs.push({ kind: 'measureFixed', len, start: rand(12, 145 - len), color: BAR_COLORS[i], label: `うごかない ものさし（${cmmm(len)}）` });
+      }
+      for (let i = 0; i < 3; i++) {
+        const x = rand(6, 13) * 10 + rand(0, 5);
+        const y = rand(2, Math.floor(x / 10) - 2) * 10 + rand((x % 10) + 1, 9);
+        qs.push({ kind: 'sub', x, y, label: `${cmmm(x)} − ${cmmm(y)}` });
+      }
+      const c = rand(1, 3) * 100 + rand(1, 9);
+      qs.push({ kind: 'toCM', cm: c, label: `${Math.floor(c / 100)}m${c % 100}cm = □cm` });
+      const m1 = rand(3, 5) * 100 + rand(1, 4) * 10;
+      const m2 = rand(1, 2) * 100 + rand(5, 9) * 10;
+      qs.push({ kind: 'msub', x: m1, y: m2, cm: m1, label: `${Math.floor(m1 / 100)}m${m1 % 100}cm − ${Math.floor(m2 / 100)}m${m2 % 100}cm` });
+      return shuffle(qs);
+    }
     const qs = [];
     for (let i = 0; i < 4; i++) {
       const len = rand(25, 125);
@@ -42,6 +61,35 @@ UNITS.nagasa = {
           },
           { kind: 'answer', expected: q.len % 10, before: `${Math.floor(q.len / 10)}cm`, unit: 'mm', prompt: `のこりは ${何}mm？` },
         ];
+      case 'measureFixed': {
+        const s = q.start;
+        return [
+          {
+            kind: 'answer', expected: Math.floor(q.len / 10), unit: 'cm',
+            prompt: `ものさしは うごかせないよ。ぼうの はしが 0 では ない。${長}さは ${何}cm${何}mm？`,
+            say: `はじまりと おわりの めもりを よんで、ちがいを ${rb('考', 'かんが')}えよう（はじまりは ${cmmm(s)}）`,
+          },
+          { kind: 'answer', expected: q.len % 10, before: `${Math.floor(q.len / 10)}cm`, unit: 'mm', prompt: `のこりは ${何}mm？` },
+        ];
+      }
+      case 'sub': {
+        const t = q.x - q.y;
+        return [
+          {
+            kind: 'answer', expected: Math.floor(t / 10), before: `${cmmm(q.x)} − ${cmmm(q.y)} =`, unit: 'cm',
+            prompt: `${長}い ぼうと みじかい ぼうの ちがいは？ mm が ひけない ときは 1cm を 10mm に しよう`,
+          },
+          { kind: 'answer', expected: t % 10, before: `${cmmm(q.x)} − ${cmmm(q.y)} = ${Math.floor(t / 10)}cm`, unit: 'mm', prompt: 'のこりは？' },
+        ];
+      }
+      case 'msub': {
+        const t = q.x - q.y;
+        const f = (v) => `${Math.floor(v / 100)}m${v % 100}cm`;
+        return [
+          { kind: 'answer', expected: Math.floor(t / 100), before: `${f(q.x)} − ${f(q.y)} =`, unit: 'm', prompt: `cm が ひけない ときは 1m を 100cm に しよう` },
+          { kind: 'answer', expected: t % 100, before: `${f(q.x)} − ${f(q.y)} = ${Math.floor(t / 100)}m`, unit: 'cm', prompt: 'のこりは？' },
+        ];
+      }
       case 'toMM':
         return [{ kind: 'answer', expected: q.mm, before: `${cmmm(q.mm)} =`, unit: 'mm', prompt: `1cm は 10mm。${何}mm に なる？` }];
       case 'toCMMM':
@@ -71,9 +119,10 @@ UNITS.nagasa = {
   },
 
   view(box, q) {
-    if (q.kind === 'toCM' || q.kind === 'toMCM') return meterView(box, q);
+    if (q.kind === 'toCM' || q.kind === 'toMCM' || q.kind === 'msub') return meterView(box, q);
     let bars;
-    if (q.kind === 'measure') bars = [{ start: q.start, len: q.len, color: q.color }];
+    if (q.kind === 'measure' || q.kind === 'measureFixed') bars = [{ start: q.start, len: q.len, color: q.color }];
+    else if (q.kind === 'sub') bars = [{ start: 0, len: q.x, color: '#ff8a3d' }, { start: 0, len: q.y, color: '#4d96ff' }];
     else if (q.kind === 'add') bars = [{ start: 0, len: q.x, color: '#ff8a3d' }, { start: q.x, len: q.y, color: '#4d96ff' }];
     else bars = [{ start: 0, len: q.mm, color: '#3cb46e' }];
     // はかる もんだいは ものさしが ずれている ところから（ゆびで うごかす）

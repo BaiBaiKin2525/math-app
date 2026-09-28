@@ -980,3 +980,14 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 .net-flat { display: grid; gap: 2px; }
 .net-flat span { width: 56px; height: 56px; }
 .net-face { border: 2px solid rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 30px; }
+/* チャレンジ */
+.kufu-chip.grouped2 { border-color: var(--blue); background: #e8f1ff; color: #2f6fd0; }
+.kz-note { width: 100%; text-align: center; font-size: 24px; font-weight: bold; color: var(--ink); margin-top: 8px; }
+.kz-wrap.col { flex-direction: column; align-items: flex-start; }
+.kz-tape { display: flex; align-items: center; gap: 10px; font-size: 20px; }
+.kz-tape span { width: 3em; text-align: right; }
+.kz-tape i { display: block; height: 26px; border-radius: 4px; }
+.kz-tape b { color: var(--sub); }
+.net-3d { position: relative; }
+.visual { position: relative; }
+.net-tools { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 8px; }

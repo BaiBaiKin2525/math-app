@@ -186,6 +186,21 @@ const LEVELS = [
     title: '⑧ <ruby>立方体<rt>りっぽうたい</rt></ruby>の てんかい<ruby>図<rt>ず</rt></ruby>', desc: '<ruby>組<rt>く</rt></ruby>み<ruby>立<rt>た</rt></ruby>てると どうなる？（3D）',
     make: () => UNITS.tenkai.questions(),
   },
+  // じゅけんの どだい チャレンジ（2年）：おなじ 単元の むずかしい もんだい
+  ...[
+    ['kukuhyo', '① <ruby>九九<rt>くく</rt></ruby>を さがそう', 'だんを かくす・3つの だん', () => kukuHardQuestions()],
+    ['kufu', '② くふうしよう', '100を 2くみ・199+46・52−19', () => kufuHardQuestions()],
+    ['nagasa', '③ <ruby>長<rt>なが</rt></ruby>さを はかろう', 'うごかない ものさし・ひきざん', () => UNITS.nagasa.questions({ hard: true })],
+    ['junjo', '④ じゅんじょよく <ruby>考<rt>かんが</rt></ruby>える', 'おなじ カード・3つ えらぶ', () => UNITS.junjo.questions({ hard: true })],
+    ['pazuru', '⑤ パズルを <ruby>作<rt>つく</rt></ruby>ろう！', '5×5 の おおきな パズル', () => UNITS.pazuru.questions({ hard: true })],
+    ['suiri', '⑥ すいりしよう', '4<ruby>人<rt>にん</rt></ruby>×4つ・5ひきの じゅん', () => UNITS.suiri.questions({ hard: true })],
+    ['kakezan', '⑦ かけ<ruby>算<rt>ざん</rt></ruby>を <ruby>考<rt>かんが</rt></ruby>えよう', '2つの しきを くみあわせる', () => UNITS.kakezan.questions({ hard: true })],
+    ['tenkai', '⑧ <ruby>立方体<rt>りっぽうたい</rt></ruby>の てんかい<ruby>図<rt>ず</rt></ruby>', 'サイコロ（むかいあう <ruby>面<rt>めん</rt></ruby>の <ruby>和<rt>わ</rt></ruby>は 7）', () => UNITS.tenkai.questions({ hard: true })],
+  ].map(([type, title, desc, make]) => ({
+    id: `j2h-${type}`, type, group: 'じゅけんの どだい チャレンジ（2年）',
+    groupHtml: '<ruby>受験<rt>じゅけん</rt></ruby>の <ruby>土台<rt>どだい</rt></ruby> チャレンジ（2<ruby>年<rt>ねん</rt></ruby>）',
+    title: title.replace(/^(\S)/, '$1★'), desc, make,
+  })),
   {
     id: 'free9', type: 'free', group: 'タイルで あそぶ',
     title: 'タイル くくひょう', desc: 'めもりを うごかして みよう',

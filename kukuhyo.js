@@ -8,6 +8,26 @@ function kukuPairs(n) {
   return out;
 }
 
+// チャレンジ：だんの 数を かくす、3つの だんの たしざん、一の くらいが 0 の 答え
+function kukuHardQuestions() {
+  const qs = [];
+  for (const n of shuffle([12, 18, 24]).slice(0, 2)) qs.push({ kind: 'find', n, label: `${rb('答', 'こた')}えが ${n}` });
+  for (const d of shuffle([3, 4, 6, 7, 8, 9]).slice(0, 2)) qs.push({ kind: 'whichrow', d, label: `${rb('何', 'なん')}の だん？` });
+  // たすと 9 いかに なる 3つの だん
+  const [a, b, c] = [[1, 2, 3], [1, 2, 4], [1, 2, 5], [1, 2, 6], [1, 3, 4], [1, 3, 5], [2, 3, 4]][rand(0, 6)];
+  qs.push({ kind: 'dansum3', a, b, c, label: `${a}・${b}・${c}の だん` });
+  qs.push({ kind: 'ones0', label: `一の${rb('位', 'くらい')}が 0` });
+  qs.push({ kind: 'count', n: 36, label: `${rb('答', 'こた')}えが 36 の ${rb('九九', 'くく')}` });
+  const cells = [];
+  while (cells.length < 5) {
+    const x = `${rand(3, 9)}x${rand(3, 9)}`;
+    if (!cells.includes(x)) cells.push(x);
+  }
+  qs.push({ kind: 'fill', cells, label: 'あなうめ（5こ）' });
+  qs.push({ kind: 'swap', a: 8, b: rand(3, 7), label: `${rb('入', 'い')}れかえ` });
+  return shuffle(qs);
+}
+
 function kukuQuestions() {
   const qs = [];
   for (const n of shuffle([6, 8, 12, 16, 18, 24]).slice(0, 3)) {
@@ -43,6 +63,24 @@ function kukuQuestions() {
 function kukuSteps(q) {
   const 答 = rb('答', 'こた');
   switch (q.kind) {
+    case 'whichrow':
+      return [{
+        kind: 'answer', expected: q.d, rows: [q.d], hideHeads: true,
+        prompt: `たての ${rb('数', 'かず')}が かくれて いるよ。ひかっている だんは ${rb('何', 'なん')}の だん？`,
+      }];
+    case 'dansum3':
+      return [{
+        kind: 'answer', expected: q.a + q.b + q.c, rows: [q.a, q.b, q.c],
+        prompt: `<b>${q.a}の だん</b>・<b>${q.b}の だん</b>・<b>${q.c}の だん</b>を たてに たすと、${rb('何', 'なん')}の だん？`,
+      }];
+    case 'ones0': {
+      const list = [];
+      for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) if ((a * b) % 10 === 0) list.push(`${a}x${b}`);
+      return [{
+        kind: 'answer', expected: list.length, markable: true, reveal: list,
+        prompt: `${答}えの 一の${rb('位', 'くらい')}が <b>0</b> に なる ${rb('九九', 'くく')}は ${rb('何', 'なん')}こ？<small>（${rb('表', 'ひょう')}に しるしを つけて かぞえよう）</small>`,
+      }];
+    }
     case 'find':
       return [{ kind: 'find', targets: kukuPairs(q.n), prompt: `${答}えが <b>${q.n}</b> に なる ところを ぜんぶ ${rb('見', 'み')}つけよう` }];
     case 'swap':
@@ -108,7 +146,7 @@ function createKukuTable(box, { onTap }) {
     add('kk-corner', '×');
     for (let b = 1; b <= 9; b++) add('kk-head', b);
     for (let a = 1; a <= 9; a++) {
-      add(`kk-head${view.rows.includes(a) ? ' row-on' : ''}`, a);
+      add(`kk-head${view.rows.includes(a) ? ' row-on' : ''}`, view.hideHeads ? '？' : a);
       for (let b = 1; b <= 9; b++) {
         const key = `${a}x${b}`;
         const hidden = view.hidden.includes(key);

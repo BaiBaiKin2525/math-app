@@ -1,10 +1,10 @@
 // 立方体の てんかい図を 3D で おりたたむ（three.js）。
-// 1まい目の 面を そこに して、となりの 面を 90° ずつ てまえ（+Z）へ おる。
+// 1まい目の 面を うえに して、となりの 面を 90° ずつ おく（−Z）へ おる（いんさつ面が そとがわ）。
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm';
 
-function faceTexture(color, star) {
+function faceTexture(color, label) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const x = c.getContext('2d');
@@ -13,12 +13,13 @@ function faceTexture(color, star) {
   x.strokeStyle = 'rgba(0,0,0,0.55)';
   x.lineWidth = 6;
   x.strokeRect(3, 3, 122, 122);
-  if (star) {
-    x.fillStyle = '#fff';
+  if (label) {
+    // ★ は しろ、サイコロの 数は こい いろ
+    x.fillStyle = label === '★' ? '#fff' : label === '？' ? '#e2553f' : '#3a2e2a';
     x.font = 'bold 84px sans-serif';
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.fillText('★', 64, 70);
+    x.fillText(label, 64, 70);
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -26,7 +27,7 @@ function faceTexture(color, star) {
 }
 
 // cells：[[x, y]]（y は した むき）、parent：{ "x,y": { from, dx, dy } }
-export function createNetView(container, { cells, parent, colors, marks }) {
+export function createNetView(container, { cells, parent, colors, labels }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   container.appendChild(renderer.domElement);
@@ -39,13 +40,15 @@ export function createNetView(container, { cells, parent, colors, marks }) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enablePan = false;
   controls.enableDamping = true;
+  // ゆびで さわったら じどうで まわるのを やめる
+  controls.addEventListener('start', () => (controls.autoRotate = false));
 
   const key = (c) => `${c[0]},${c[1]}`;
   const hinges = []; // { pivot, axis, sign }
   const faces = {};
   const makeFace = (i) => {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ map: faceTexture(colors[i], marks.includes(i)), side: THREE.DoubleSide, roughness: 0.6 });
+    const mat = new THREE.MeshStandardMaterial({ map: faceTexture(colors[i], labels[i]), side: THREE.DoubleSide, roughness: 0.6 });
     g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), mat));
     return g;
   };
@@ -71,17 +74,17 @@ export function createNetView(container, { cells, parent, colors, marks }) {
     face.position.copy(dir).multiplyScalar(0.5);
     pivot.add(face);
     faces[key(c)] = face;
-    // てまえ（+Z）に おれる むき
-    if (dx === 1) hinges.push({ pivot, axis: 'y', sign: -1 });
-    else if (dx === -1) hinges.push({ pivot, axis: 'y', sign: 1 });
-    else if (dy === 1) hinges.push({ pivot, axis: 'x', sign: -1 });
-    else hinges.push({ pivot, axis: 'x', sign: 1 });
+    // おく（−Z）に おる：かみの てんかい図と おなじく、いんさつした 面が そとがわに くる
+    if (dx === 1) hinges.push({ pivot, axis: 'y', sign: 1 });
+    else if (dx === -1) hinges.push({ pivot, axis: 'y', sign: -1 });
+    else if (dy === 1) hinges.push({ pivot, axis: 'x', sign: 1 });
+    else hinges.push({ pivot, axis: 'x', sign: -1 });
   }
 
   const size = Math.max(w, h);
   // ひらいた とき：てんかい図の まんなか／くみたてた とき：立方体の まんなか に カメラを むける
-  const flatTarget = new THREE.Vector3(0, 0, 0.3);
-  const cubeTarget = root.position.clone().add(new THREE.Vector3(0, 0, 0.5));
+  const flatTarget = new THREE.Vector3(0, 0, 0);
+  const cubeTarget = root.position.clone().add(new THREE.Vector3(0, 0, -0.5));
   const flatOffset = new THREE.Vector3(0, -size * 1.1, size * 1.9);
   const cubeOffset = new THREE.Vector3(1.6, -2.4, 2.6);
   camera.position.copy(flatTarget).add(flatOffset);

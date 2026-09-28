@@ -13,7 +13,14 @@ const PUZZLES = [
   ['AABCC', 'ABBBC', 'DDEFF', 'DEEEF'],
   ['AAAA', 'BCCD', 'BCCD', 'BBDD'],
 ];
-const PIECE_COLORS = ['#ff8a3d', '#4d96ff', '#3cb46e', '#e2553f', '#9b6bd6', '#f2c230'];
+// チャレンジ：いたが おおい・おおきい
+const HARD_PUZZLES = [
+  ['AABBB', 'ACCCB', 'DDDCE', 'DFFEE'],
+  ['AAABB', 'ACCBB', 'DCCEE', 'DDDEF'],
+  ['ABBBC', 'AADCC', 'EEDDC', 'EFFFF'],
+  ['AABBB', 'ACCDB', 'ECCDD', 'EFFGD', 'EEFGG'],
+];
+const PIECE_COLORS = ['#ff8a3d', '#4d96ff', '#3cb46e', '#e2553f', '#9b6bd6', '#f2c230', '#2bb3b1'];
 
 // マスを 0,0 から に そろえて、うえの だん・ひだりから じゅんに ならべる
 function normCells(cells) {
@@ -41,7 +48,12 @@ function parsePuzzle(rows) {
 }
 
 UNITS.pazuru = {
-  questions() {
+  questions(opts = {}) {
+    if (opts.hard) {
+      const qs = shuffle(HARD_PUZZLES).map((p) => ({ kind: 'puzzle', puzzle: p, label: `パズル（${p.length}×${p[0].length}）` }));
+      qs.push({ kind: 'area', puzzle: HARD_PUZZLES[3], label: `タイルは ${rb('何', 'なん')}まい？` });
+      return qs;
+    }
     const qs = shuffle(PUZZLES).slice(0, 5).map((p) => ({ kind: 'puzzle', puzzle: p, label: `パズル（${p.length}×${p[0].length}）` }));
     for (const p of shuffle(PUZZLES).slice(0, 2)) {
       qs.push({ kind: 'area', puzzle: p, label: `タイルは ${rb('何', 'なん')}まい？` });

@@ -3,8 +3,8 @@
 // ヒントは まいかい つくりなおし、こたえが 1とおりに きまる ことを ぜんぶ ためして たしかめる。
 
 const PEOPLE = ['たろう', 'はなこ', 'けんた', 'ゆい'];
-const SUIRI_FRUITS = [['りんご', '🍎'], ['バナナ', '🍌'], ['ぶどう', '🍇']];
-const ANIMALS = [['うさぎ', '🐰'], ['かめ', '🐢'], ['いぬ', '🐶'], ['ねこ', '🐱']];
+const SUIRI_FRUITS = [['りんご', '🍎'], ['バナナ', '🍌'], ['ぶどう', '🍇'], ['みかん', '🍊']];
+const ANIMALS = [['うさぎ', '🐰'], ['かめ', '🐢'], ['いぬ', '🐶'], ['ねこ', '🐱'], ['りす', '🐿️']];
 
 function permutations(n) {
   if (n === 1) return [[0]];
@@ -27,25 +27,26 @@ function pickClues(all, candidates, truth) {
   return alive.length === 1 && String(alive[0]) === String(truth) ? clues : null;
 }
 
-function gridQuestion() {
-  const people = shuffle(PEOPLE).slice(0, 3);
-  const truth = shuffle([0, 1, 2]); // truth[ひと] = くだもの
+// n：ひとと くだものの かず（3 か 4）
+function gridQuestion(n = 3) {
+  const people = shuffle(PEOPLE).slice(0, n);
+  const fruits = shuffle(SUIRI_FRUITS).slice(0, n);
+  const truth = shuffle([...Array(n).keys()]); // truth[ひと] = くだもの
   const all = [];
-  for (let i = 0; i < 3; i++) {
-    for (let f = 0; f < 3; f++) {
-      if (truth[i] === f) all.push({ text: `${people[i]}は ${SUIRI_FRUITS[f][0]}が すき`, test: (p) => p[i] === f, pos: true });
-      else all.push({ text: `${people[i]}は ${SUIRI_FRUITS[f][0]}が すき では ない`, test: (p) => p[i] !== f });
+  for (let i = 0; i < n; i++) {
+    for (let f = 0; f < n; f++) {
+      if (truth[i] === f) all.push({ text: `${people[i]}は ${fruits[f][0]}が すき`, test: (p) => p[i] === f, pos: true });
+      else all.push({ text: `${people[i]}は ${fruits[f][0]}が すき では ない`, test: (p) => p[i] !== f });
     }
   }
   // 「すき」を いきなり いわない ヒントを おおめに
   let clues = null;
-  for (let tries = 0; !clues && tries < 50; tries++) clues = pickClues(all.filter((c) => !c.pos || Math.random() < 0.3), permutations(3), truth);
-  const f = rand(0, 2);
-  return { kind: 'grid', people, truth, clues: clues.map((c) => c.text), ask: f, label: `だれが ${SUIRI_FRUITS[f][0]}？` };
+  for (let tries = 0; !clues && tries < 50; tries++) clues = pickClues(all.filter((c) => !c.pos || Math.random() < 0.3), permutations(n), truth);
+  const f = rand(0, n - 1);
+  return { kind: 'grid', people, fruits, truth, clues: clues.map((c) => c.text), ask: f, label: `だれが ${fruits[f][0]}？` };
 }
 
-function orderQuestion() {
-  const n = Math.random() < 0.5 ? 3 : 4;
+function orderQuestion(n = Math.random() < 0.5 ? 3 : 4) {
   const animals = shuffle(ANIMALS).slice(0, n);
   const truth = shuffle([...Array(n).keys()]); // truth[じゅんい] = どうぶつ（0 が いちばん はやい）
   const rank = (p, a) => p.indexOf(a);
@@ -63,16 +64,18 @@ function orderQuestion() {
 }
 
 UNITS.suiri = {
-  questions() {
+  questions(opts = {}) {
+    // チャレンジ：4にん×4つ、5ひきの じゅんばん
+    if (opts.hard) return shuffle([gridQuestion(4), gridQuestion(4), gridQuestion(4), orderQuestion(5), orderQuestion(5), orderQuestion(4)]);
     return shuffle([gridQuestion(), gridQuestion(), gridQuestion(), orderQuestion(), orderQuestion(), orderQuestion()]);
   },
 
   steps(q) {
     const 何 = rb('何', 'なに');
     if (q.kind === 'grid') {
-      const fruit = SUIRI_FRUITS[q.ask];
+      const fruit = q.fruits[q.ask];
       const who = q.truth.indexOf(q.ask);
-      const other = (q.ask + 1) % 3;
+      const other = (q.ask + 1) % q.fruits.length;
       return [
         {
           kind: 'choice', options: q.people, answer: who,
@@ -82,7 +85,7 @@ UNITS.suiri = {
         },
         {
           kind: 'choice', options: q.people, answer: q.truth.indexOf(other),
-          prompt: `では、${SUIRI_FRUITS[other][1]} <b>${SUIRI_FRUITS[other][0]}</b>が すきなのは？`,
+          prompt: `では、${q.fruits[other][1]} <b>${q.fruits[other][0]}</b>が すきなのは？`,
         },
       ];
     }
@@ -103,10 +106,11 @@ UNITS.suiri = {
       if (q.kind === 'grid') {
         const t = document.createElement('div');
         t.className = 'sr-grid';
-        t.innerHTML = `<span></span>${SUIRI_FRUITS.map((f) => `<span class="sr-head">${f[1]}<br>${f[0]}</span>`).join('')}`;
+        t.style.gridTemplateColumns = `auto repeat(${q.fruits.length}, 64px)`;
+        t.innerHTML = `<span></span>${q.fruits.map((f) => `<span class="sr-head">${f[1]}<br>${f[0]}</span>`).join('')}`;
         q.people.forEach((p, i) => {
           t.insertAdjacentHTML('beforeend', `<span class="sr-head">${p}</span>`);
-          SUIRI_FRUITS.forEach((_, f) => {
+          q.fruits.forEach((_, f) => {
             const key = `${i},${f}`;
             const b = document.createElement('button');
             b.className = 'sr-cell';
