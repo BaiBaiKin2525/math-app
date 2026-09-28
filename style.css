@@ -1054,3 +1054,15 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 .sk-dot { border-radius: 50%; background: var(--orange); }
 .level-card .pt { font-size: 13px; color: #b07d00; margin-top: auto; }
 .level-card .pt + .best { margin-top: 0; }
+
+/* ⑥ すいり：ぜんてい・ヒントが おおい とき */
+.sr-wrap { max-height: 100%; overflow-y: auto; width: 100%; padding: 4px 8px; }
+.sr-premise { background: #fff6cf; border: 2px solid var(--lit); border-radius: 10px; padding: 6px 12px; font-size: 17px; font-weight: bold; text-align: center; }
+.sr-premise:empty { display: none; }
+.sr-wrap.many { gap: 6px; }
+.sr-wrap.many .sr-title { font-size: 16px; }
+.sr-wrap.many .sr-clues { font-size: 16px; line-height: 1.5; columns: 2; column-gap: 28px; }
+.sr-wrap.many .sr-clues li { break-inside: avoid; }
+.sr-wrap.many .sr-head { font-size: 14px; }
+.sr-wrap.many .sr-cell { width: 50px; height: 42px; font-size: 24px; }
+@media (max-width: 560px) { .sr-wrap.many .sr-clues { columns: 1; } }

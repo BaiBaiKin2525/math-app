@@ -43,7 +43,9 @@ function gridQuestion(n = 3) {
   let clues = null;
   for (let tries = 0; !clues && tries < 50; tries++) clues = pickClues(all.filter((c) => !c.pos || Math.random() < 0.3), permutations(n), truth);
   const f = rand(0, n - 1);
-  return { kind: 'grid', people, fruits, truth, clues: clues.map((c) => c.text), ask: f, label: `だれが ${fruits[f][0]}？` };
+  // ぜんていを はっきり かく（1人 1つ、おなじ くだものは 1人だけ）
+  const premise = `${n}${rb('人', 'にん')}は それぞれ ちがう くだものが すき（1${rb('人', 'にん')} 1つ。おなじ くだものを すきな ${rb('人', 'ひと')}は いない）`;
+  return { kind: 'grid', people, fruits, truth, premise, clues: clues.map((c) => c.text), ask: f, label: `だれが ${fruits[f][0]}？` };
 }
 
 function orderQuestion(n = Math.random() < 0.5 ? 3 : 4) {
@@ -60,7 +62,8 @@ function orderQuestion(n = Math.random() < 0.5 ? 3 : 4) {
   }
   let clues = null;
   for (let tries = 0; !clues && tries < 50; tries++) clues = pickClues(all, permutations(n), truth);
-  return { kind: 'order', animals, truth, clues: clues.map((c) => c.text), label: `はやい じゅん（${n}ひき）` };
+  const premise = `おなじ はやさの どうぶつは いない`;
+  return { kind: 'order', animals, truth, premise, clues: clues.map((c) => c.text), label: `はやい じゅん（${n}ひき）` };
 }
 
 UNITS.suiri = {
@@ -102,11 +105,13 @@ UNITS.suiri = {
       box.innerHTML = '';
       const wrap = document.createElement('div');
       wrap.className = 'sr-wrap';
-      wrap.innerHTML = `<div class="sr-title">ヒント</div><ol class="sr-clues">${q.clues.map((c) => `<li>${c}</li>`).join('')}</ol>`;
+      const many = q.clues.length > 4 || (q.fruits && q.fruits.length > 3);
+      wrap.classList.toggle('many', many);
+      wrap.innerHTML = `<div class="sr-premise">${q.premise || ''}</div><div class="sr-title">ヒント</div><ol class="sr-clues">${q.clues.map((c) => `<li>${c}</li>`).join('')}</ol>`;
       if (q.kind === 'grid') {
         const t = document.createElement('div');
         t.className = 'sr-grid';
-        t.style.gridTemplateColumns = `auto repeat(${q.fruits.length}, 64px)`;
+        t.style.gridTemplateColumns = `auto repeat(${q.fruits.length}, ${many ? 50 : 64}px)`;
         t.innerHTML = `<span></span>${q.fruits.map((f) => `<span class="sr-head">${f[1]}<br>${f[0]}</span>`).join('')}`;
         q.people.forEach((p, i) => {
           t.insertAdjacentHTML('beforeend', `<span class="sr-head">${p}</span>`);
