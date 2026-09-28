@@ -228,115 +228,237 @@ function buildDango() {
   return { group: g, legs, body, ball, anim };
 }
 
+// こうちゅうの いろ：light＝ひかりが あたる うえの いろ、dark＝ふちの くらい いろ
 const BEETLE_STYLE = {
-  kabuto: { color: 0x2b1209, rough: 0.38, legLens: [0.42, 0.36, 0.4], spines: [3, 2, 2] },
-  kokuwa: { color: 0x15100d, rough: 0.42, jaw: 0.55, striae: true, tooth: 'small' },
-  nokogiri: { color: 0x3f1a0a, rough: 0.35, jaw: 1.0, tooth: 'saw' },
-  miyama: { color: 0x3f301a, rough: 0.6, jaw: 0.9, ears: true, hairy: true, tooth: 'fork' },
-  ookuwa: { color: 0x0a0909, rough: 0.35, jaw: 0.75, thick: true, striae: true, tooth: 'big' },
-  kanabun: { color: 0x2a6436, rough: 0.28, metal: true },
+  kabuto: { light: 0x5e2412, dark: 0x100403, leg: 0x2c120a, rough: 0.28 },
+  kanabun: { light: 0x3f8a46, dark: 0x0c2e16, leg: 0x1a2a1a, rough: 0.25, metal: true },
+  kokuwa: { light: 0x302620, dark: 0x080605, leg: 0x1a1411, rough: 0.35, jaw: 0.6, head: 0.17, tooth: 'small', striae: true },
+  nokogiri: { light: 0x5a220c, dark: 0x120503, leg: 0x2c1208, rough: 0.28, jaw: 1.05, head: 0.21, tooth: 'saw', curve: 0.9 },
+  miyama: { light: 0x5a4527, dark: 0x1a1209, leg: 0x2c2012, rough: 0.55, jaw: 1.0, head: 0.24, tooth: 'fork', ears: true, hairy: true },
+  ookuwa: { light: 0x2a2a30, dark: 0x040404, leg: 0x141414, rough: 0.3, jaw: 0.8, head: 0.22, tooth: 'big', thick: true, striae: true, curve: 0.6 },
 };
+
+// うえが あかるく、ふち・おなかがわが くらく なる だえんたい（しゃしんの ような つや）
+function shadedEllipsoid(mat, sx, sy, sz, pos, st, seg = 40, box = 1) {
+  const geo = new THREE.SphereGeometry(1, seg, Math.round(seg * 0.7));
+  const p = geo.attributes.position;
+  const unit = p.array.slice(); // いろを きめる ための もとの むき
+  const light = new THREE.Color(st.light);
+  const dark = new THREE.Color(st.dark);
+  const col = [];
+  for (let i = 0; i < p.count; i++) {
+    const x = unit[i * 3];
+    const y = unit[i * 3 + 1];
+    const z = unit[i * 3 + 2];
+    // box < 1 で かどの まるい はこに ちかづく
+    if (box !== 1) {
+      const f = (v) => Math.sign(v) * Math.pow(Math.abs(v), box);
+      p.setXYZ(i, f(x), f(y), f(z));
+    }
+    const t = Math.min(1, Math.max(0, 0.3 + 0.7 * y + 0.12 * z - 0.2 * Math.abs(x)));
+    const c = dark.clone().lerp(light, Math.pow(t, 1.3));
+    col.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  if (box !== 1) geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat);
+  m.scale.set(sx, sy, sz);
+  m.position.copy(pos);
+  return m;
+}
+
+// こうちゅうの ながい あし：つけね → もも（うえに まがる）→ すね（とげ）→ 5つの ふせつ → かぎづめ
+function beetleLeg(mat, s, { len, hipY, fwd, thick, spines }) {
+  const pivot = new THREE.Group();
+  const coxa = V(s * len * 0.07, -hipY * 0.1, fwd * 0.03);
+  const knee = V(s * len * 0.4, len * 0.13, fwd * 0.3);
+  const ankle = V(s * len * 0.74, -hipY + len * 0.06, fwd * 0.72);
+  const toe = V(s * len * 1.02, -hipY + 0.004, fwd * 1.05 + len * 0.06);
+  pivot.add(ellipsoid(mat, thick * 1.4, thick * 1.2, thick * 1.4, V(0, 0, 0), 10));
+  pivot.add(rod(mat, V(0, 0, 0), coxa, thick * 1.3, thick * 1.2));
+  const femur = rod(mat, coxa, knee, thick * 1.35, thick * 1.05);
+  femur.scale.z = 0.75; // ひらたい もも
+  pivot.add(femur);
+  pivot.add(ellipsoid(mat, thick * 0.95, thick * 0.95, thick * 0.95, knee, 10));
+  pivot.add(rod(mat, knee, ankle, thick * 0.75, thick * 1.1));
+  // すねの そとがわの とげ
+  for (let i = 1; i <= spines; i++) {
+    const q = knee.clone().lerp(ankle, 0.3 + (0.65 * i) / (spines + 1));
+    pivot.add(cone(mat, q, q.clone().add(V(s * len * 0.06, len * 0.02, len * 0.02)), thick * 0.32));
+  }
+  // すねの さきの 2ほんの けづめ
+  for (const c of [-1, 1]) pivot.add(cone(mat, ankle, ankle.clone().add(V(s * len * 0.02, -len * 0.03, c * len * 0.04)), thick * 0.3));
+  // ふせつ（5つの ふし。さきほど ほそい）
+  let prev = ankle;
+  for (let i = 1; i <= 5; i++) {
+    const q = ankle.clone().lerp(toe, i / 5);
+    q.y += Math.sin((i / 5) * Math.PI) * len * 0.02;
+    const r = thick * (0.55 - i * 0.05);
+    pivot.add(rod(mat, prev, q, r * 1.1, r * 0.8));
+    pivot.add(ellipsoid(mat, r, r, r, q, 8));
+    prev = q;
+  }
+  // かぎづめ
+  const dir = new THREE.Vector3().subVectors(toe, ankle).normalize();
+  for (const c of [-1, 1]) {
+    const side = V(-dir.z, 0, dir.x).multiplyScalar(c * len * 0.025);
+    pivot.add(taper(mat, [toe, toe.clone().addScaledVector(dir, len * 0.04).add(side).add(V(0, 0.002, 0)), toe.clone().addScaledVector(dir, len * 0.06).add(side).add(V(0, -len * 0.025, 0))], thick * 0.28, thick * 0.05, 6, 6));
+  }
+  return pivot;
+}
+
+function beetleLegs(g, mat, { hips, side, lens, hipY, thick, spread, spines }) {
+  const legs = [];
+  hips.forEach((z, i) => {
+    for (const s of [-1, 1]) {
+      const L = lens[i];
+      const pivot = beetleLeg(mat, s, { len: L, hipY, thick, fwd: L * spread[i], spines: spines[i] });
+      pivot.position.set(s * side, hipY, z);
+      pivot.userData = { side: s, phase: (i + (s > 0 ? 1 : 0)) % 2 ? Math.PI : 0 };
+      g.add(pivot);
+      legs.push(pivot);
+    }
+  });
+  return legs;
+}
 
 // sizeRatio：0（ちいさい）〜 1（おおきい）。おおきい こほど つの・あごが ながい
 function buildBeetle(species, sizeRatio) {
   const st = BEETLE_STYLE[species];
   const g = new THREE.Group();
-  const shell = st.metal
-    ? shiny(st.color, { metalness: 0.6, roughness: 0.3, envMapIntensity: 0.8 })
-    : st.hairy
-      ? new THREE.MeshPhysicalMaterial({ color: st.color, roughness: 0.65, sheen: 0.6, sheenColor: 0x9c7a3a, sheenRoughness: 0.5, clearcoat: 0.15, envMapIntensity: 0.5 })
-      : shiny(st.color, { roughness: st.rough });
-  const dark = shiny(0x140d0a, { roughness: 0.4, clearcoat: 0.6 });
-  const under = std(0x1c130f, { roughness: 0.55 });
-  const eye = shiny(0x050505, { roughness: 0.08 });
-
-  // はね（かたい はね）と ふち、まんなかの あわせめ、たての すじ
-  const e = { sx: 0.27, sy: 0.13, sz: 0.42, cy: 0.23, cz: -0.14 };
-  g.add(ellipsoid(shell, e.sx, e.sy, e.sz, V(0, e.cy, e.cz), 32));
-  g.add(surfaceLine(dark, e, 0, 0.2, -0.5, 0.005));
-  if (st.striae) for (const x of [-0.19, -0.11, 0.11, 0.19]) g.add(surfaceLine(dark, e, x, 0.15, -0.45, 0.0025));
-  g.add(ellipsoid(under, 0.24, 0.08, 0.36, V(0, 0.15, -0.12)));
-  // しょうばん（はねの つけねの さんかく）
-  g.add(ellipsoid(shell, 0.035, 0.01, 0.05, V(0, 0.355, 0.22), 12));
-  // むね（ぜんきょうはい）
-  const pw = species === 'kanabun' ? 0.23 : 0.25;
-  g.add(ellipsoid(shell, pw, 0.1, 0.15, V(0, 0.23, 0.28), 28));
-
-  // あたま（つの・おおあごは あたまと いっしょに うごく）
+  const shell = new THREE.MeshPhysicalMaterial({
+    vertexColors: true,
+    roughness: st.rough,
+    metalness: st.metal ? 0.55 : 0.05,
+    clearcoat: st.hairy ? 0.2 : 1,
+    clearcoatRoughness: 0.12,
+    sheen: st.hairy ? 0.35 : 0,
+    sheenColor: 0xb89048,
+    envMapIntensity: 0.9,
+  });
+  const legMat = shiny(st.leg, { roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15, envMapIntensity: 0.8 });
+  const dark = shiny(0x120a07, { roughness: 0.4 });
+  const under = std(0x1a100b, { roughness: 0.5 });
+  const eye = shiny(0x050505, { roughness: 0.05, envMapIntensity: 1 });
+  const k = 0.55 + 0.7 * sizeRatio;
+  const isKabuto = species === 'kabuto' || species === 'kanabun';
   const head = new THREE.Group();
-  head.position.set(0, 0.19, 0.45);
-  g.add(head);
-  head.add(ellipsoid(shell, species === 'kanabun' ? 0.1 : 0.14, 0.06, 0.1, V(0, 0, 0)));
-  for (const s of [-1, 1]) head.add(ellipsoid(eye, 0.035, 0.035, 0.035, V(s * (species === 'kanabun' ? 0.09 : 0.13), 0.015, 0.02), 14));
-  if (st.ears) for (const s of [-1, 1]) head.add(ellipsoid(shell, 0.065, 0.05, 0.075, V(s * 0.15, 0.02, -0.02)));
-
-  // しょっかく：クワガタは まがって さきが くし、カブト・カナブンは おうぎ
   const antennae = [];
-  for (const s of [-1, 1]) {
-    const a = antennaPivot(head, V(s * 0.1, 0.02, 0.07));
-    if (st.jaw) {
-      a.add(rod(dark, V(0, 0, 0), V(s * 0.11, 0.03, 0.06), 0.009));
-      a.add(rod(dark, V(s * 0.11, 0.03, 0.06), V(s * 0.16, 0.02, 0.13), 0.007));
-      for (let i = 0; i < 4; i++) a.add(ellipsoid(dark, 0.006, 0.02, 0.012, V(s * (0.16 + i * 0.012), 0.02, 0.13 + i * 0.006), 8));
-    } else {
-      a.add(rod(dark, V(0, 0, 0), V(s * 0.05, 0, 0.07), 0.008));
+  const jaws = [];
+  let legs;
+
+  if (isKabuto) {
+    // ---- カブトムシ・カナブン：たかく もりあがった まるい からだ ----
+    const kana = species === 'kanabun';
+    const e = { sx: kana ? 0.26 : 0.28, sy: kana ? 0.16 : 0.19, sz: 0.44, cy: 0.23, cz: -0.18 };
+    g.add(shadedEllipsoid(shell, e.sx, e.sy, e.sz, V(0, e.cy, e.cz), st, 48, 0.82));
+    g.add(surfaceLine(dark, e, 0, 0.18, -0.52, 0.004));
+    g.add(ellipsoid(under, 0.25, 0.1, 0.36, V(0, 0.13, -0.15)));
+    g.add(ellipsoid(dark, 0.13, 0.1, 0.07, V(0, 0.25, 0.1)));                           // くびれ
+    g.add(shadedEllipsoid(shell, kana ? 0.2 : 0.25, kana ? 0.13 : 0.16, kana ? 0.13 : 0.17, V(0, kana ? 0.24 : 0.25, 0.28), st, 40, 0.85)); // むね
+    head.position.set(0, 0.15, 0.45);
+    g.add(head);
+    head.add(shadedEllipsoid(shell, 0.12, 0.07, 0.11, V(0, 0, 0), st, 24));
+    for (const s of [-1, 1]) head.add(ellipsoid(eye, 0.03, 0.03, 0.03, V(s * 0.1, 0.02, 0.03), 14));
+    for (const s of [-1, 1]) {
+      const a = antennaPivot(head, V(s * 0.09, 0, 0.08));
+      a.add(rod(legMat, V(0, 0, 0), V(s * 0.05, -0.01, 0.06), 0.008));
       for (let i = -1; i <= 1; i++) {
-        const plate = ellipsoid(dark, 0.006, 0.018, 0.035, V(s * 0.06, i * 0.015, 0.1), 8);
+        const plate = ellipsoid(legMat, 0.006, 0.02, 0.035, V(s * 0.06, -0.01 + i * 0.015, 0.09), 8);
         plate.rotation.x = i * 0.3;
         a.add(plate);
       }
+      antennae.push(a);
     }
-    antennae.push(a);
-  }
-
-  const k = 0.55 + 0.7 * sizeRatio;
-  const jaws = [];
-  if (species === 'kabuto') {
-    const horn = shiny(0x2a120a, { roughness: 0.25 });
-    // あたまの つの（うえに そりかえって さきが ふたまた）
-    const tip = V(0, 0.22 + 0.24 * k, 0.3 + 0.24 * k);
-    head.add(taper(horn, [V(0, 0.02, 0.07), V(0, 0.04 + 0.02 * k, 0.18 + 0.12 * k), V(0, 0.1 + 0.12 * k, 0.28 + 0.22 * k), tip], 0.06, 0.03, 24));
+    if (species === 'kabuto') {
+      const horn = new THREE.MeshPhysicalMaterial({ color: 0x2a0f07, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 0.9 });
+      // あたまの つの：まえに のびて おおきく うえに そり、さきが 2かい わかれる
+      const P = (y, z) => V(0, y * k, z * k);
+      const pts = [V(0, 0.03, 0.08), P(0.06, 0.24), P(0.16, 0.38), P(0.33, 0.47), P(0.5, 0.46)];
+      head.add(taper(horn, pts, 0.075, 0.034, 28));
+      const tip = pts[pts.length - 1];
+      for (const s of [-1, 1]) {
+        const mid = tip.clone().add(V(s * 0.05, 0.06, -0.02));
+        head.add(taper(horn, [tip, tip.clone().add(V(s * 0.025, 0.03, 0)), mid], 0.032, 0.02, 8, 8));
+        for (const t of [-1, 1]) {
+          head.add(taper(horn, [mid, mid.clone().add(V(s * 0.02 + t * 0.012, 0.035, -0.01 + t * 0.012)), mid.clone().add(V(s * 0.03 + t * 0.025, 0.06, -0.02 + t * 0.02))], 0.02, 0.004, 8, 6));
+        }
+      }
+      // むねの つの：みじかく まえに つきでて さきが ふたまた
+      const tb = V(0, 0.42, 0.3);
+      const tt = V(0, 0.45 + 0.02 * k, 0.4 + 0.07 * k);
+      g.add(taper(horn, [tb, V(0, 0.45, 0.35), tt], 0.045, 0.02, 12));
+      for (const s of [-1, 1]) g.add(taper(horn, [tt, tt.clone().add(V(s * 0.02, 0.004, 0.025))], 0.015, 0.003, 6, 6));
+    }
+    legs = beetleLegs(g, legMat, {
+      hips: [0.25, 0.08, -0.07], side: 0.16, lens: kana ? [0.46, 0.44, 0.48] : [0.62, 0.52, 0.58],
+      hipY: 0.17, thick: kana ? 0.022 : 0.028, spread: [0.55, 0.05, -0.55], spines: [4, 2, 2],
+    });
+  } else {
+    // ---- クワガタ：ほそながい はね、はばの ひろい むね、おおきな あたまと おおあご ----
+    const e = { sx: 0.25, sy: 0.15, sz: 0.42, cy: 0.22, cz: -0.22 };
+    g.add(shadedEllipsoid(shell, e.sx, e.sy, e.sz, V(0, e.cy, e.cz), st, 48, 0.8));
+    g.add(surfaceLine(dark, e, 0, 0.14, -0.6, 0.004));
+    if (st.striae) for (const x of [-0.15, -0.08, 0.08, 0.15]) g.add(surfaceLine(dark, e, x, 0.1, -0.55, 0.0022));
+    g.add(ellipsoid(under, 0.22, 0.08, 0.38, V(0, 0.13, -0.2)));
+    g.add(ellipsoid(dark, 0.11, 0.07, 0.05, V(0, 0.22, 0.22)));                         // くびれ
+    // むね：はねと おなじくらい はばひろく、かどが ある
+    g.add(shadedEllipsoid(shell, 0.26, 0.11, 0.13, V(0, 0.23, 0.33), st, 40, 0.7));
+    for (const s of [-1, 1]) g.add(shadedEllipsoid(shell, 0.05, 0.08, 0.1, V(s * 0.24, 0.22, 0.35), st, 16));
+    // あたま：おおきくて はばひろい
+    const hw = st.head * (0.8 + 0.3 * sizeRatio);
+    head.position.set(0, 0.2, 0.53);
+    g.add(head);
+    head.add(shadedEllipsoid(shell, hw, 0.075, 0.12, V(0, 0, 0), st, 32, 0.72));
+    if (st.ears) for (const s of [-1, 1]) head.add(shadedEllipsoid(shell, 0.06, 0.06, 0.08, V(s * hw * 0.9, 0.015, -0.03), st, 16));
+    for (const s of [-1, 1]) head.add(ellipsoid(eye, 0.03, 0.028, 0.03, V(s * hw * 0.88, 0.01, 0.06), 14));
+    // しょっかく：ながい ねもとで まがって、さきが くし
     for (const s of [-1, 1]) {
-      head.add(taper(horn, [tip, tip.clone().add(V(s * 0.04, 0.05, -0.01)), tip.clone().add(V(s * 0.08, 0.09, -0.05))], 0.03, 0.006, 10, 8));
+      const a = antennaPivot(head, V(s * hw * 0.7, 0.01, 0.1));
+      a.add(rod(legMat, V(0, 0, 0), V(s * 0.14, 0.02, 0.04), 0.008));
+      a.add(rod(legMat, V(s * 0.14, 0.02, 0.04), V(s * 0.19, 0.02, 0.12), 0.006));
+      for (let i = 0; i < 4; i++) a.add(ellipsoid(legMat, 0.006, 0.018, 0.012, V(s * (0.19 + i * 0.011), 0.02, 0.12 + i * 0.006), 8));
+      antennae.push(a);
     }
-    const mid = new THREE.CatmullRomCurve3([V(0, 0.04 + 0.02 * k, 0.18 + 0.12 * k), V(0, 0.1 + 0.12 * k, 0.28 + 0.22 * k)]).getPoint(0.6);
-    for (const s of [-1, 1]) head.add(cone(horn, mid, mid.clone().add(V(s * 0.03, 0.02, 0.04)), 0.015));
-    // むねの つの（まえに つきでて さきが ふたまた）
-    const tt = V(0, 0.36 + 0.02 * k, 0.44 + 0.08 * k);
-    g.add(taper(horn, [V(0, 0.31, 0.3), V(0, 0.35, 0.37 + 0.04 * k), tt], 0.04, 0.018, 14));
-    for (const s of [-1, 1]) g.add(taper(horn, [tt, tt.clone().add(V(s * 0.025, 0.005, 0.03))], 0.018, 0.004, 6, 6));
-  } else if (st.jaw) {
-    const jawMat = shiny(st.color, { roughness: 0.32 });
+    // おおあご
+    const jawMat = new THREE.MeshPhysicalMaterial({ color: st.light, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 0.9 });
+    jawMat.color.lerp(new THREE.Color(st.dark), 0.45);
     const L = st.jaw * k;
-    const r0 = st.thick ? 0.055 : 0.042;
+    const r0 = st.thick ? 0.058 : 0.045;
+    const bend = st.curve || 0.3;
     for (const s of [-1, 1]) {
       const pivot = new THREE.Group();
-      pivot.position.set(s * 0.07, 0, 0.09);
+      pivot.position.set(s * hw * 0.55, -0.005, 0.1);
       head.add(pivot);
-      const bend = species === 'nokogiri' ? 0.05 * L : 0;
-      const pts = [V(0, 0, 0), V(s * 0.08, 0.005, 0.12 * L), V(s * (0.07 + bend), 0.02 + bend, 0.26 * L), V(-s * 0.03, 0.01, 0.37 * L)];
-      const jaw = taper(jawMat, pts, r0, 0.005, 24);
+      const pts = [
+        V(0, 0, 0),
+        V(s * 0.06, 0.01, 0.12 * L),
+        V(s * 0.05, 0.02 - 0.02 * bend, 0.26 * L),
+        V(-s * 0.05 * bend, 0.015 - 0.03 * bend, 0.36 * L),
+      ];
+      const jaw = taper(jawMat, pts, r0, 0.006, 28);
       pivot.add(jaw);
       const path = jaw.userData.path;
-      const tooth = (u, size) => {
-        const p = path.getPointAt(u);
-        pivot.add(cone(jawMat, p, p.clone().add(V(-s * size, 0.004, size * 0.35)), size * 0.35));
+      const tooth = (u, size, up = 0) => {
+        const q = path.getPointAt(u);
+        pivot.add(cone(jawMat, q, q.clone().add(V(-s * size, up, size * 0.3)), size * 0.35));
       };
-      if (st.tooth === 'saw') for (let i = 0; i < 7; i++) tooth(0.25 + i * 0.08, 0.03);
-      if (st.tooth === 'big') tooth(0.35, 0.06);
-      if (st.tooth === 'small') tooth(0.7, 0.03);
+      if (st.tooth === 'saw') for (let i = 0; i < 8; i++) tooth(0.22 + i * 0.075, 0.028);
+      if (st.tooth === 'big') tooth(0.4, 0.065, 0.01);
+      if (st.tooth === 'small') tooth(0.68, 0.035);
       if (st.tooth === 'fork') {
-        for (const u of [0.3, 0.45, 0.6]) tooth(u, 0.025);
-        const p = path.getPointAt(0.9);
-        pivot.add(cone(jawMat, p, p.clone().add(V(0, 0.06, 0.02)), 0.014));
+        for (const u of [0.35, 0.5, 0.62]) tooth(u, 0.028);
+        const q = path.getPointAt(0.92);
+        pivot.add(cone(jawMat, q, q.clone().add(V(0, 0.06, 0.02)), 0.016));
       }
       jaws.push({ pivot, s });
     }
+    legs = beetleLegs(g, legMat, {
+      hips: [0.3, 0.1, -0.08], side: 0.15, lens: [0.62, 0.56, 0.62],
+      hipY: 0.16, thick: 0.024, spread: [0.6, 0.05, -0.6], spines: [3, 1, 1],
+    });
   }
-  const legs = addLegs(g, dark, {
-    hips: [0.28, 0.1, -0.06], side: 0.19, len: 0.4, lens: st.legLens || [0.42, 0.36, 0.4],
-    hipY: 0.17, thick: 0.03, spines: st.spines || [2, 2, 2], flat: 1.4,
-  });
+
   const phase = Math.random() * 10;
   const anim = (t) => {
     antennae.forEach((a, i) => {
