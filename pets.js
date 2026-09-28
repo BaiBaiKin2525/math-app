@@ -351,21 +351,34 @@ async function mountRoom() {
   const box = $('room3d');
   $('room-msg').textContent = 'よみこみちゅう…';
   $('room-msg').style.display = '';
+  const onSelect = (id) => {
+    pets.selected = id;
+    renderPetInfo();
+  };
+  let reason = '';
   try {
+    if (/[?&]flat=1/.test(location.search)) throw new Error('URL の flat=1 で かんたん ひょうじを えらんでいます');
     const mod = await import('./pet3d.js');
     if (!$('pets').classList.contains('active')) return;
     if (pets.room) pets.room.dispose();
-    pets.room = mod.createInsectRoom(box, {
-      onSelect: (id) => {
-        pets.selected = id;
-        renderPetInfo();
-      },
-    });
+    pets.room = mod.createInsectRoom(box, { onSelect });
     $('room-msg').style.display = 'none';
     syncRoom(true);
+    return;
   } catch (e) {
-    $('room-msg').textContent = '3D を よみこめませんでした。インターネットに つないで ひらきなおしてね';
+    reason = e && e.message ? e.message : String(e);
   }
+  if (!$('pets').classList.contains('active')) return;
+  // はじめての よみこみで インターネットに つながっていない ときは つないでもらう
+  if (!navigator.onLine) {
+    $('room-msg').textContent = '3D を よみこめませんでした。インターネットに つないで ひらきなおしてね';
+    return;
+  }
+  // 3D に たいおう していない ブラウザ：かんたん ひょうじで そだてられる ように する
+  if (pets.room) pets.room.dispose();
+  pets.room = createFlatRoom(box, { onSelect, reason });
+  $('room-msg').style.display = 'none';
+  syncRoom(true);
 }
 
 function currentCase() {

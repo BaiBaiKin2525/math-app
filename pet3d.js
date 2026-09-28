@@ -2,8 +2,10 @@
 //   ゆびで ドラッグ：まわす／ピンチ：ズーム／タップ：むしを えらぶ（ダンゴムシは まるくなる）
 // たんい は cm。むしの モデルは からだの ながさ 1 で つくって、おおきさに あわせて かくだいする。
 
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// import map を つかわない（ふるい iPad の Safari・Chrome は import map に たいおう していない）。
+// jsDelivr の +esm は OrbitControls の なかの 'three' も おなじ URL に かきかえて くれる
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
