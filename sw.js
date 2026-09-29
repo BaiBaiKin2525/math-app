@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v40';
+const VERSION = 'v42';
 const FILES = [
   './',
   'index.html',
@@ -74,6 +74,8 @@ const FILES = [
   'models/bug_dango.glb',
   'models/bug_larva.glb',
   'models/bug_pupa.glb',
+  'models/bug_caucasus.glb',
+  'models/bug_hercules.glb',
   'settings.js',
   'manifest.json',
   'icons/icon-192.png',

@@ -3,6 +3,7 @@
 #     "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python blender/insects.py -- kabuto
 #     しゅるい：kabuto（カブトムシ）・kanabun（カナブン）・kokuwa・nokogiri・miyama・ookuwa（クワガタ）
 #               ant（アリ）・dango（ダンゴムシ）・larva（ようちゅう）・pupa（さなぎ）
+#               caucasus（コーカサスオオカブト）・hercules（ヘラクレスオオカブト）
 #   ふつうは node blender/build.mjs で ぜんぶ つくる
 #
 # アプリ（pet3d.js）での きまり：
@@ -58,8 +59,12 @@ SPEC = {
     'dango': dict(kind='dango'),
     'larva': dict(kind='larva'),   # こうちゅうの ようちゅう（どの しゅるいも これ）
     'pupa': dict(kind='pupa'),     # さなぎ。pupa_horn（カブト）・pupa_jaws（クワガタ）は アプリで だしわける
+    # がいこくの おおきな カブトムシ（こまかく つくる：DETAIL・1024 の がぞう）
+    'caucasus': dict(kind='dyn', hi=True),   # コーカサスオオカブト：くろい きんぞくの ような つや、つの 3ぼん
+    'hercules': dict(kind='dyn', hi=True),   # ヘラクレスオオカブト：きいろい はねに くろい てん、ながい むねの つの
 }
 SP = SPEC[KIND]
+DETAIL = 2 if SP.get('hi') else 1   # わぎりの こまかさの ばいりつ
 
 
 # ---------- がぞう・ざいしつ ----------
@@ -114,7 +119,8 @@ def lin(c):
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
 
-def material(name, color=(1, 1, 1), img=None, rough=0.4, metal=0.0, coat=0.0):
+def material(name, color=(1, 1, 1), img=None, rough=0.4, metal=0.0, coat=0.0, normal=None):
+    """normal：でこぼこの がぞう（normal_image でつくる）"""
     m = bpy.data.materials.new(name)
     b = m.node_tree.nodes['Principled BSDF']
     b.inputs['Base Color'].default_value = (*lin(color), 1)
@@ -127,7 +133,24 @@ def material(name, color=(1, 1, 1), img=None, rough=0.4, metal=0.0, coat=0.0):
         t = m.node_tree.nodes.new('ShaderNodeTexImage')
         t.image = img
         m.node_tree.links.new(t.outputs['Color'], b.inputs['Base Color'])
+    if normal:
+        t = m.node_tree.nodes.new('ShaderNodeTexImage')
+        t.image = normal
+        nm = m.node_tree.nodes.new('ShaderNodeNormalMap')
+        m.node_tree.links.new(t.outputs['Color'], nm.inputs['Color'])
+        m.node_tree.links.new(nm.outputs['Normal'], b.inputs['Normal'])
     return m
+
+
+def normal_image(name, h, strength=3.0):
+    """たかさ（0〜1）から でこぼこの がぞう"""
+    dx = (np.roll(h, -1, axis=1) - np.roll(h, 1, axis=1)) * strength
+    dy = (np.roll(h, -1, axis=0) - np.roll(h, 1, axis=0)) * strength
+    n = np.stack([-dx, -dy, np.ones_like(h)], axis=2)
+    n /= np.linalg.norm(n, axis=2, keepdims=True)
+    img = image(name, n * 0.5 + 0.5)
+    img.colorspace_settings.name = 'Non-Color'
+    return img
 
 
 # ---------- かたちの どうぐ ----------
@@ -167,6 +190,7 @@ class Builder:
     def blob(self, center, radii, e=1.0, deform=None, seg=32, uvbox=None, uvfn=None):
         """かどの まるい はこ〜だえんたい（e < 1 で はこに ちかい）。uv は うえから みた ひらき
         uvfn(x, y, z)：なかの ざひょうから uv を きめる ときに つかう"""
+        seg = seg * DETAIL
         geom = bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=max(8, int(seg * 0.7)), radius=1)
         cx, cy, cz = center
         for v in geom['verts']:
@@ -187,7 +211,9 @@ class Builder:
                 else:
                     loop[self.uvl].uv = (0.5 + x / (2 * box[0]), 0.5 + z / (2 * box[1]))
 
-    def tube(self, path, radii, ring=8, flat=1.0, cap=True):
+    def tube(self, path, radii, ring=8, flat=1.0, cap=True, fine=True):
+        if fine:
+            ring = ring * DETAIL
         path = [np.asarray(p, dtype=float) for p in path]
         n = len(path)
         tans = [norm(path[min(i + 1, n - 1)] - path[max(i - 1, 0)]) for i in range(n)]
@@ -217,8 +243,9 @@ class Builder:
     def cone(self, a, b, r):
         self.tube([a, (np.asarray(a) + np.asarray(b)) / 2, b], [r, r * 0.55, 0.0005], ring=6)
 
-    def taper(self, pts, r0, r1, n=20, ring=10):
+    def taper(self, pts, r0, r1, n=20, ring=10, flat=1.0):
         """なめらかに まがる だんだん ほそく なる つつ（つの・あご）"""
+        n = n * DETAIL
         pts = [np.asarray(p, dtype=float) for p in pts]
         path = []
         for i in range(n + 1):
@@ -229,7 +256,7 @@ class Builder:
             p1, p2 = pts[k], pts[k + 1]
             p3 = pts[min(k + 2, len(pts) - 1)]
             path.append(0.5 * (2 * p1 + (-p0 + p2) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (-p0 + 3 * p1 - 3 * p2 + p3) * f ** 3))
-        self.tube(path, [r0 + (r1 - r0) * (i / n) ** 0.9 for i in range(n + 1)], ring=ring)
+        self.tube(path, [r0 + (r1 - r0) * (i / n) ** 0.9 for i in range(n + 1)], ring=ring, flat=flat)
         return path
 
     def spline(self, pts, radii, n=24, ring=14, flat=1.0):
@@ -279,7 +306,13 @@ def build_leg(name, hip, s, L, hipY, thick, fwd, spines, mat, root):
     mid = (coxa + knee) / 2 + np.array([0, L * 0.02, 0])
     b.tube([coxa, mid, knee], [thick * 1.3, thick * 1.45, thick * 1.0], ring=10, flat=0.7)  # ひらたい もも
     b.blob(tuple(knee), (thick, thick, thick), seg=10)
-    b.tube([knee, (knee + ankle) / 2, ankle], [thick * 0.75, thick * 0.95, thick * 1.1], ring=8)
+    b.tube([knee, (knee + ankle) / 2, ankle], [thick * 0.75, thick * 0.95, thick * 1.1], ring=8, flat=0.72 if DETAIL > 1 else 1.0)
+    if DETAIL > 1:
+        # すねの みじかい け（こまかい モデル）
+        for i in range(14):
+            q = knee + (ankle - knee) * (0.1 + 0.85 * i / 13)
+            side = np.array([s * 0.6, -0.3 + 0.6 * (i % 2), 0.4])
+            b.tube([q, q + norm(side) * L * 0.035], [thick * 0.12, thick * 0.02], ring=3, cap=False, fine=False)
     for i in range(1, spines + 1):
         q = knee + (ankle - knee) * (0.3 + 0.65 * i / (spines + 1))
         b.cone(q, q + np.array([s * L * 0.06, L * 0.02, L * 0.02]), thick * 0.32)
@@ -853,10 +886,203 @@ def build_pupa(root):
     mesh_obj('pupa_jaws_mesh', jb.bm, fold, jaws)
 
 
+# ---------- がいこくの おおきな カブトムシ（コーカサス・ヘラクレス） ----------
+
+def dyn_texture(front):
+    """1024 の がぞう。コーカサス：くろくて きんぞくの ような みどり〜どうの つや。
+    ヘラクレス：はねは きいろ〜オリーブに くろい てん（しゃしんを さんこう）、むね・あたまは くろ"""
+    W = H = 1024
+    U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
+    edge = np.abs(U - 0.5) * 2
+    herc = KIND == 'hercules'
+    fine = value_noise(W, H, 96)
+    if herc and not front:
+        base = np.array([0.76, 0.62, 0.27])
+        olive = np.array([0.5, 0.43, 0.17])
+        k = smoothstep(0.55, 0.98, edge)[..., None]
+        col = base * (1 - k) + olive * k
+        col = col * (0.88 + 0.24 * value_noise(W, H, 10))[..., None] * (0.94 + 0.12 * fine)[..., None]
+        # くろい てん（ふちが ぎざぎざ）
+        spots = np.zeros_like(U)
+        for _ in range(46):
+            cu, cv = 0.08 + rng.random() * 0.84, 0.05 + rng.random() * 0.9
+            r = 0.008 + rng.random() ** 2 * 0.03
+            spots = np.maximum(spots, np.exp(-(((U - cu) / r) ** 2 + ((Vv - cv) / (r * 1.3)) ** 2)))
+        spots = smoothstep(0.35, 0.55, spots * (0.75 + 0.5 * value_noise(W, H, 64)))
+        col = col * (1 - spots[..., None]) + np.array([0.03, 0.025, 0.02]) * spots[..., None]
+        # あわせめ と ふちは くろ
+        blk = smoothstep(0.012, 0.004, np.abs(U - 0.5))
+        col = col * (1 - blk[..., None]) + np.array([0.03, 0.025, 0.02]) * blk[..., None]
+    else:
+        dark = np.array([0.012, 0.012, 0.011])
+        if KIND == 'caucasus':
+            light = np.array([0.1, 0.12, 0.085]) if not front else np.array([0.08, 0.09, 0.075])
+        else:
+            light = np.array([0.07, 0.065, 0.06])
+        k = smoothstep(0.98, 0.15, edge)[..., None] * (0.6 + 0.4 * value_noise(W, H, 12))[..., None]
+        col = dark * (1 - k) + light * k
+        if not front:
+            col *= (1 - 0.7 * smoothstep(0.006, 0.0, np.abs(U - 0.5)))[..., None]
+            # はねの たての うすい すじ
+            f = (U * 22) % 1
+            col *= (1 - 0.18 * smoothstep(0.06, 0.0, np.minimum(f, 1 - f)))[..., None]
+    # こまかい あな（てんてん）
+    pits = rng.random((H, W)) > 0.985
+    col[pits] *= 0.65
+    return image('shell_front' if front else 'shell', col)
+
+
+def dyn_bump(front):
+    """から の でこぼこ：こまかい あな・ゆるい うねり（はねは たての すじ）"""
+    W = H = 1024
+    U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
+    h = value_noise(W, H, 24) * 0.25 + value_noise(W, H, 90) * 0.12
+    pit = np.zeros((H, W))
+    idx = rng.random((H, W)) > (0.992 if KIND == 'hercules' and not front else 0.985)
+    pit[idx] = 1
+    # あなを すこし ひろげる
+    pit = np.maximum.reduce([pit, np.roll(pit, 1, 0) * 0.6, np.roll(pit, 1, 1) * 0.6, np.roll(pit, -1, 0) * 0.6, np.roll(pit, -1, 1) * 0.6])
+    h -= pit * 0.5
+    if not front:
+        f = (U * 22) % 1
+        h -= 0.3 * smoothstep(0.06, 0.0, np.minimum(f, 1 - f))
+        h -= 0.6 * smoothstep(0.008, 0.0, np.abs(U - 0.5))
+    return normal_image('bump_front' if front else 'bump', h, strength=2.5)
+
+
+def build_dyn(root):
+    herc = KIND == 'hercules'
+    cauc = KIND == 'caucasus'
+    shell = material('shell', img=dyn_texture(False), rough=0.45 if herc else 0.16, metal=0.0 if herc else 0.35, coat=0.35 if herc else 1.0,
+                     normal=dyn_bump(False))
+    front = material('shell_front', img=dyn_texture(True), rough=0.14, metal=0.3 if cauc else 0.1, coat=1.0, normal=dyn_bump(True))
+    horn_m = material('horn', (0.025, 0.024, 0.022), rough=0.14, metal=0.3 if cauc else 0.1, coat=1.0)
+    legm = material('leg', (0.03, 0.028, 0.026), rough=0.25, metal=0.2 if cauc else 0.0, coat=0.9)
+    under = material('under', (0.05, 0.04, 0.035), rough=0.5)
+    eye = material('eye', (0.02, 0.02, 0.02), rough=0.05, coat=1.0)
+    # はね：せなかが たかく、かたが はって うしろに すこし ほそく なる
+    def elytra(u, p):
+        if u[1] < 0:
+            p[1] *= 0.5
+        p[0] *= 1 - 0.2 * max(0.0, -u[2]) ** 2 + 0.03 * max(0.0, u[2]) ** 4
+        p[1] -= 0.012 * math.exp(-(p[0] / 0.01) ** 2) * max(0.0, u[1])
+        return p
+    b = Builder()
+    b.blob((0, 0.28, -0.32), (0.3, 0.19, 0.4), e=0.86, deform=elytra, seg=48)
+    mesh_obj('shell', b.bm, shell, root)
+    # むね：おおきく まるい。まえは つのの ねもとに むかって もりあがる
+    def pron(u, p):
+        if u[1] < 0:
+            p[1] *= 0.5
+        if herc:
+            p[1] += 0.05 * max(0.0, u[2]) * max(0.0, u[1]) ** 2
+        return p
+    b = Builder()
+    b.blob((0, 0.28, 0.12), (0.29, 0.17, 0.2), e=0.8, deform=pron, seg=44, uvbox=(0.3, 0.4))
+    b.blob((0, 0.4, 0.05), (0.035, 0.01, 0.035), seg=10)   # こばん（はねの あいだの さんかく）
+    mesh_obj('pronotum', b.bm, front, root)
+    u = Builder()
+    def ster(uu, p):
+        f = ((1 - uu[2]) / 2 * 5) % 1          # おなかの ふし
+        p[1] *= 1 - 0.06 * f * (uu[1] < 0)
+        return p
+    u.blob((0, 0.18, -0.2), (0.22, 0.07, 0.38), deform=ster, seg=28)
+    u.blob((0, 0.24, 0.26), (0.12, 0.08, 0.08), seg=16)
+    mesh_obj('under', u.bm, under, root)
+
+    # むねの つの（horn_T：おおきさで のびる）
+    ht = empty('horn_T', (0, 0.4, 0.18), root)
+    tb = Builder()
+    hair = []
+    if cauc:
+        # むねの かたから 2ほん。うえ・そとへ のびて、さきは うしの つのの ように うちがわへ まがる
+        # （原製作所の 3D スキャン どうがを さんこう）。ねもとは むねから なだらかに もりあがる
+        for sgn in (-1, 1):
+            pts = [(sgn * 0.15, -0.07, -0.05), (sgn * 0.22, 0.0, 0.05), (sgn * 0.28, 0.12, 0.16), (sgn * 0.29, 0.25, 0.26),
+                   (sgn * 0.24, 0.34, 0.34), (sgn * 0.15, 0.37, 0.38)]
+            tb.taper(pts, 0.075, 0.012, n=30, ring=12)
+            tb.blob((sgn * 0.17, -0.04, -0.02), (0.09, 0.07, 0.1), seg=20)
+        tb.taper([(0, -0.01, 0.0), (0, 0.02, 0.06), (0, 0.03, 0.09)], 0.03, 0.008, n=6, ring=10)   # まんなかの ちいさな こぶ
+    else:
+        # ながい むねの つの：まえへ のびて さきが すこし さがる。ねもとの よこに はが 1つずつ
+        pts = [(0, -0.02, -0.04), (0, 0.06, 0.08), (0, 0.11, 0.28), (0, 0.12, 0.5), (0, 0.09, 0.7), (0, 0.03, 0.82)]
+        path = tb.taper(pts, 0.078, 0.014, n=36, ring=14, flat=0.8)
+        for sgn in (-1, 1):
+            q = path[int(0.3 * (len(path) - 1))]
+            tb.taper([q, q + np.array([sgn * 0.05, -0.02, 0.02]), q + np.array([sgn * 0.075, -0.045, 0.03])], 0.022, 0.004, n=6, ring=8)
+        hair = path
+    mesh_obj('horn_T_mesh', tb.bm, horn_m, ht)
+    if herc:
+        # つのの したがわの ちゃいろい け（しゃしんで オレンジ〜ちゃいろ）
+        hb = Builder()
+        hm = material('hair', (0.48, 0.24, 0.08), rough=0.9)
+        n = len(hair)
+        for _ in range(900):
+            t = 0.32 + rng.random() * 0.6
+            q = hair[int(t * (n - 1))]
+            r = 0.078 + (0.014 - 0.078) * t ** 0.9
+            a = (rng.random() - 0.5) * 2.2
+            base = q + np.array([math.sin(a) * r * 0.95, -math.cos(a) * r * 0.8, 0])
+            L = 0.018 + rng.random() * 0.02
+            tip = base + np.array([math.sin(a) * L * 0.4, -L, L * 0.5 + rng.random() * 0.01])
+            hb.tube([base, tip], [0.0035, 0.0006], ring=4, cap=False, fine=False)
+        mesh_obj('hair', hb.bm, hm, ht)
+
+    # あたま・め・しょっかく（さきが 3まいの ひだ）・ひげ
+    head = empty('head', (0, 0.16, 0.36), root)
+    h = Builder()
+    h.blob((0, 0, 0), (0.11, 0.065, 0.1), e=0.88, seg=28, uvbox=(0.3, 0.4))
+    mesh_obj('head_shell', h.bm, front, head)
+    ey = Builder()
+    for sgn in (-1, 1):
+        ey.blob((sgn * 0.1, 0.015, 0.02), (0.028, 0.03, 0.03), seg=14)
+    mesh_obj('eyes', ey.bm, eye, head)
+    for sgn, tag in ((-1, 'R'), (1, 'L')):
+        a = empty(f'ant_{tag}', (sgn * 0.085, -0.005, 0.07), head)
+        ab = Builder()
+        ab.tube([(0, 0, 0), (sgn * 0.03, -0.005, 0.03), (sgn * 0.05, -0.01, 0.06)], [0.008, 0.007, 0.007], ring=6)
+        for i in (-1, 0, 1):
+            ab.blob((sgn * 0.058, -0.01 + i * 0.013, 0.085), (0.005, 0.018, 0.03), seg=8)
+        mesh_obj(f'ant_{tag}_mesh', ab.bm, legm, a)
+    pb = Builder()
+    for sgn in (-1, 1):
+        pb.taper([(sgn * 0.04, -0.05, 0.08), (sgn * 0.055, -0.07, 0.11), (sgn * 0.05, -0.085, 0.13)], 0.007, 0.004, n=5, ring=6)
+    mesh_obj('palps', pb.bm, legm, head)
+
+    # あたまの つの（horn）
+    horn = empty('horn', (0, 0.02, 0.08), head)
+    hb = Builder()
+    if cauc:
+        # うえに おおきく そる。ねもとに ちかい ところに まえむきの は
+        # あたまの つのは まっすぐ うえへ たかく のびる（3ぼんで いちばん たかい）
+        pts = [(0, 0, 0), (0, 0.03, 0.12), (0, 0.13, 0.25), (0, 0.3, 0.33), (0, 0.48, 0.36), (0, 0.66, 0.35)]
+        path = hb.taper(pts, 0.07, 0.012, n=32, ring=12)
+        q = path[int(0.34 * (len(path) - 1))]
+        hb.taper([q, q + np.array([0, 0.03, 0.045]), q + np.array([0, 0.045, 0.07])], 0.022, 0.004, n=6, ring=8)
+    else:
+        # したから うえへ そって、むねの つのの さきの したへ。うえがわに は が 2つ
+        pts = [(0, 0, 0), (0, 0.02, 0.12), (0, 0.07, 0.26), (0, 0.14, 0.38), (0, 0.2, 0.44)]
+        path = hb.taper(pts, 0.06, 0.016, n=30, ring=12, flat=0.85)
+        for t, L in ((0.42, 0.05), (0.62, 0.04)):
+            i = int(t * (len(path) - 1))
+            q = path[i]
+            d = norm(path[i + 1] - q)
+            up = norm(np.cross(d, np.array([1.0, 0, 0])))
+            if up[1] < 0:
+                up = -up
+            hb.taper([q, q + up * L * 0.6 + d * L * 0.3, q + up * L + d * L * 0.5], 0.02, 0.004, n=6, ring=8)
+    mesh_obj('horn_mesh', hb.bm, horn_m, horn)
+
+    # あし：まえあしが とても ながい（コーカサス）
+    lens = [0.8, 0.58, 0.64] if cauc else [0.7, 0.58, 0.64]
+    build_legs(root, legm, hips=[0.25, 0.08, -0.07], side=0.17, lens=lens, hipY=0.17, thick=0.029,
+               spread=[0.6, 0.05, -0.55], spines=[5, 3, 3])
+
+
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     root = empty('bug', (0, 0, 0))
-    other = {'ant': build_ant, 'dango': build_dango, 'larva': build_larva, 'pupa': build_pupa}.get(SP['kind'])
+    other = {'ant': build_ant, 'dango': build_dango, 'larva': build_larva, 'pupa': build_pupa, 'dyn': build_dyn}.get(SP['kind'])
     if other:
         other(root)
         export()

@@ -125,16 +125,18 @@ SPECS = {
     ),
     'arowana': dict(
         zT=-0.36, round=0.85,
-        top=[0.022, 0.03, 0.05, 0.068, 0.075, 0.078, 0.078, 0.074, 0.066, 0.052, 0.032],
-        bot=[-0.022, -0.032, -0.058, -0.082, -0.094, -0.098, -0.094, -0.082, -0.064, -0.042, -0.012],
+        top=[0.022, 0.03, 0.05, 0.068, 0.075, 0.078, 0.077, 0.071, 0.06, 0.042, 0.02],
+        bot=[-0.022, -0.032, -0.058, -0.082, -0.094, -0.098, -0.094, -0.08, -0.058, -0.03, 0.004],
         wid=[0.011, 0.016, 0.03, 0.042, 0.048, 0.05, 0.05, 0.048, 0.042, 0.03, 0.012],
-        eye=dict(s=0.9, a=0.95, r=0.026, iris=(0.85, 0.7, 0.3)), scales=(11, 5), head_scales=False, barbel=True, scale_edge=0.3,
+        eye=dict(s=0.9, a=0.95, r=0.031, iris=(0.85, 0.7, 0.3)), scales=(26, 5), head_scales=False, barbel=True, scale_edge=0.12,
         dorsal=dict(t=(0.04, 0.3), h=0.07, sweep=0.6, shape='long'), anal=dict(t=(0.02, 0.42), h=0.09, sweep=0.6, shape='long'),
-        tail=dict(len=0.14, span=0.08, kind='fork', fork=-0.3, round=0.2), pect=0.08, pelvic=0.04,
+        tail=dict(len=0.14, span=0.08, kind='fork', fork=-0.3, round=0.2), pect=0.11, pelvic=0.04,
+        hi=True,   # こまかく つくる（2048 の がぞう・こまかい あみめ・うろこの でこぼこを かたちに）
     ),
 }
 SP = SPECS[KIND]
 ZT = SP['zT']
+HI = SP.get('hi', False)
 
 
 def _hermite(pts, s):
@@ -308,10 +310,50 @@ def paint_angel(S, Vv, d):
 
 
 def paint_arowana(S, Vv, d):
-    col = lerp3([0.9, 0.9, 0.9], [0.45, 0.52, 0.52], smoothstep(0.5, 0.9, d))
+    """シルバーアロワナ（しゃしんを さんこう）：ぎんいろの からだ、せなかは みどりがかった はいいろ。
+    おおきな うろこは 1まいずつ すこし きんいろ・ももいろ・あおみどりに ひかる"""
+    col = lerp3([0.9, 0.9, 0.88], [0.42, 0.5, 0.48], smoothstep(0.55, 0.92, d))
+    ns, nv = SP['scales']
+    row = np.floor(Vv * nv * 2)
+    cell = np.floor(S * ns + 0.5 * (row % 2))
+    hsh = np.sin(cell * 12.9898 + row * 78.233) * 43758.5453
+    r1 = hsh - np.floor(hsh)
+    r2 = (hsh * 1.7) - np.floor(hsh * 1.7)
+    tint = np.stack([0.06 * r1 - 0.02, 0.03 * r2 - 0.01, 0.05 * (1 - r1) - 0.02], axis=-1)   # うろこごとの いろの ゆらぎ
+    body = smoothstep(0.84, 0.78, S)[..., None]
+    col = col + tint * body * smoothstep(0.1, 0.4, d)[..., None]
+    # うろこの ふちの あみめ：はいいろの せんに ももいろの ひかり
+    fx = (S * ns + 0.5 * (row % 2)) % 1
+    fy = (Vv * nv * 2) % 1
+    dist = np.hypot((fx - 0.62) * 1.0, (fy - 0.5) * 0.85)
+    rim = (smoothstep(0.4, 0.47, dist) * smoothstep(0.56, 0.48, dist))[..., None] * body
+    col = col * (1 - 0.22 * rim) + np.array([0.85, 0.66, 0.72]) * 0.2 * rim
+    # 1まいの なかで うしろの ふちほど あかるい（かさなりの かげ）
+    col = col * (1 + 0.1 * (0.55 - fx) * body[..., 0])[..., None]
+    # そくせん（よこの せん）
+    ll = smoothstep(0.012, 0.0, np.abs(d - 0.62)) * smoothstep(0.84, 0.78, S) * ((S * ns * 2) % 1 < 0.5)
+    col = lerp3(col, [0.3, 0.32, 0.3], ll * 0.5)
+    # あたま：うろこは なく、えらぶたの ほねの もよう
+    head = smoothstep(0.8, 0.86, S)
+    plate = smoothstep(0.01, 0.0, np.abs(np.hypot((S - 0.86) * 3.2, (d - 0.48) * 1.0) - 0.28)) * head
+    col = lerp3(col, [0.55, 0.58, 0.55], plate * 0.6)
+    col = col * (1 + 0.08 * (value_noise_fish(S.shape, 40) - 0.5) * head)[..., None]
     # うえむきの おおきな くち（あごの せん）
     jaw = smoothstep(0.012, 0.003, np.abs((d - 0.62) - (S - 0.9) * 2.2)) * smoothstep(0.9, 0.93, S)
     return lerp3(col, [0.15, 0.15, 0.15], jaw * 0.8)
+
+
+def value_noise_fish(shape, cells):
+    H, W = shape
+    g = rng.random((cells, cells))
+    ys = np.arange(H) / H * cells
+    xs = np.arange(W) / W * cells
+    y0, x0 = np.floor(ys).astype(int), np.floor(xs).astype(int)
+    ty, tx = ys - y0, xs - x0
+    y1, x1 = (y0 + 1) % cells, (x0 + 1) % cells
+    top = g[y0][:, x0] * (1 - tx) + g[y0][:, x1] * tx
+    bot = g[y1][:, x0] * (1 - tx) + g[y1][:, x1] * tx
+    return top * (1 - ty[:, None]) + bot * ty[:, None]
 
 
 PAINTERS = {'betta': paint_betta, 'guppy': paint_guppy, 'neon': paint_neon, 'angel': paint_angel, 'arowana': paint_arowana}
@@ -337,7 +379,7 @@ FIN_COLORS = {
     'guppy': ([1.0, 0.55, 0.15], [0.2, 0.35, 1.0], 0.9, 0.7),
     'neon': ([0.9, 0.92, 0.92], [0.96, 0.97, 0.97], 0.35, 0.2),
     'angel': ([0.86, 0.86, 0.82], [0.96, 0.96, 0.95], 0.6, 0.3),
-    'arowana': ([0.55, 0.55, 0.5], [0.75, 0.62, 0.45], 0.85, 0.6),
+    'arowana': ([0.46, 0.5, 0.44], [0.62, 0.6, 0.5], 0.88, 0.62),
 }
 FIN_VARIANT = {
     ('betta', 2): ([0.6, 0.04, 0.08], [0.95, 0.2, 0.2], 0.92, 0.7),
@@ -349,8 +391,11 @@ def fin_texture(W=256, H=128):
     U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
     r = 1 - Vv  # ねもと 0 → さき 1
     base, tip, a0, a1 = FIN_VARIANT.get((KIND, PATTERN), FIN_COLORS[KIND])
-    f = (U * 10) % 1
+    f = (U * (26 if HI else 10)) % 1
     ray = smoothstep(0.1, 0.02, np.minimum(f, 1 - f))
+    if HI:
+        # すじの ふしと、ふちの くらい いろ
+        ray = ray * (0.75 + 0.25 * (np.sin(Vv * 90) > 0))
     k = smoothstep(0.2, 0.95, r)[..., None]
     col = np.array(base) * (1 - k) + np.array(tip) * k
     col = col * (1 - 0.22 * ray[..., None])
@@ -423,12 +468,21 @@ def new_object(name, bm, material):
     return ob
 
 
-def build_body(material):
+def build_body(material, height=None):
+    """height：うろこの でこぼこ（あれば かたちを すこし ふくらませる）"""
     bm = bmesh.new()
     uvl = bm.loops.layers.uv.new('UVMap')
-    N, M = 72, 40
+    N, M = (260, 120) if HI else (72, 40)
     ss = [1 - (1 - i / N) ** 1.25 for i in range(N)]
-    rings = [[bm.verts.new(P(*section(s, 2 * math.pi * j / M))) for j in range(M)] for s in ss]
+    def vert(s, j):
+        a = 2 * math.pi * j / M
+        p = np.array(section(s, a))
+        if height is not None:
+            hh, ww = height.shape
+            h = height[min(hh - 1, int(j / M * hh)), min(ww - 1, int(s * ww))]
+            p = p + outward(s, a) * h * 0.0022
+        return bm.verts.new(P(*p))
+    rings = [[vert(s, j) for j in range(M)] for s in ss]
     snout = bm.verts.new(P(0, mid(1), 0.5 + 0.004))
     tail = bm.verts.new(P(0, mid(0), Z(0) - 0.002))
     for i in range(N - 1):
@@ -588,10 +642,11 @@ def build_barbels(mat):
     for side in (1, -1):
         base = np.array([side * wid(s0) * 0.5, bot(s0) + 0.004, Z(s0)])
         tip = base + np.array([side * 0.012, 0.03, 0.07])
-        for k in range(8):
-            q = k / 7
-            c = base * (1 - q) + tip * q
-            rr = 0.005 * (1 - q * 0.7)
+        n = 24 if HI else 8
+        for k in range(n):
+            q = k / (n - 1)
+            c = base * (1 - q) + tip * q + np.array([0, -0.006 * math.sin(q * math.pi), 0])
+            rr = 0.0045 * (1 - q * 0.7)
             sphere_into(bm, c, (rr, rr, rr), 8, 6)
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return new_object('barbel', bm, mat)
@@ -615,9 +670,9 @@ def build_wen(mat):
 
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    tex, height = body_texture()
+    tex, height = body_texture(2048, 1024) if HI else body_texture()
     body_img = make_image(f'{NAME}_body', tex)
-    fin_img = make_image(f'{NAME}_fin', fin_texture())
+    fin_img = make_image(f'{NAME}_fin', fin_texture(1024, 512) if HI else fin_texture())
     velvet = KIND == 'demekin'
     body_mat = make_material('body', body_img, None, rough=0.62 if velvet else 0.4, metal=0.0 if velvet else 0.06)
     fin_mat = make_material('fin', fin_img, rough=0.5, alpha=True)
@@ -625,7 +680,7 @@ def main():
     iris = make_material('iris', color=(0.1, 0.08, 0.07, 1) if velvet else (*(ic or (0.85, 0.66, 0.3)), 1), rough=0.35, metal=0.5)
     pupil = make_material('pupil', color=(0.01, 0.01, 0.01, 1), rough=0.05)
     stalk = make_material('stalk', color=(0.06, 0.05, 0.08, 1), rough=0.6)
-    build_body(body_mat)
+    build_body(body_mat, height if HI else None)
     build_fins(fin_mat)
     build_eyes(iris, pupil, stalk)
     if SP.get('barbel'):

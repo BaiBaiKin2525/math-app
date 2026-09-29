@@ -79,6 +79,20 @@ const SPECIES = {
     text: 'くろく ひかる、ふとい おおあごの クワガタ。「くろい ダイヤ」と よばれる ことも あります。',
     trivia: 'しぜんの なかでは かずが すくなく、みつけるのが とても むずかしい クワガタです。',
   },
+  // がいこくの おおきな カブトムシ：せいちゅうで くる。しいくケース（大）に 1ぴきだけ（alone）
+  // adultSize：かった ときの おおきさ（mm）、viewCm：3D での おおきさ
+  caucasus: {
+    name: 'コーカサスオオカブト', icon: '🪲', price: 5000, caseSize: 3, alone: true, size: [60, 130], adultSize: 115, viewCm: 12.5, life: 150,
+    lives: 'インドネシアや マレーシアの やま', eats: 'じゅえき、くだもの',
+    text: 'アジアで いちばん おおきい カブトムシ。くろく ひかる からだに、ながい つのが 3ぼん あります。',
+    trivia: 'きが あらく、つよい カブトムシ。ながい まえあしで きに しっかり つかまります。',
+  },
+  hercules: {
+    name: 'ヘラクレスオオカブト', icon: '🪲', price: 5000, caseSize: 3, alone: true, size: [50, 180], adultSize: 150, viewCm: 14, life: 300,
+    lives: 'みなみアメリカや カリブかいの しまの もり', eats: 'じゅえき、くだもの',
+    text: 'せかいで いちばん ながい カブトムシ。むねの ながい つのと あたまの つので あいてを はさみます。',
+    trivia: 'きいろい はねは、しめりけが おおいと くろっぽく かわります。',
+  },
 };
 
 // boost：ようちゅうに あげると そだちが ふえる（1にち 1かいずつ）
@@ -173,7 +187,7 @@ function newPet(id, species, caseId, today) {
   const sp = SPECIES[species];
   return {
     id, species, caseId, stage: sp.larva ? 'larva' : 'adult', stageStart: today,
-    growth: 0, size: sp.larva ? null : sp.size[0], adultSince: sp.larva ? null : today,
+    growth: 0, size: sp.larva ? null : sp.adultSize || sp.size[0], adultSince: sp.larva ? null : today,
     fedDays: [], starve: 0, fed: null,
   };
 }
@@ -313,7 +327,7 @@ function view3d(p) {
     mm *= 0.8;
   }
   // ちいさい むしも みえる ように すこし おおきめに かく
-  const lengthCm = Math.max(2.2, Math.min(12, (mm / 10) * 1.3));
+  const lengthCm = sp.viewCm && p.stage === 'adult' ? sp.viewCm : Math.max(2.2, Math.min(12, (mm / 10) * 1.3));
   const mood = moodOf(p);
   return { id: p.id, species: p.species, stage: p.stage, lengthCm, sizeRatio, weak: mood.weak, sleeping: !!mood.sleeping };
 }
@@ -389,6 +403,9 @@ function currentCase() {
 }
 
 const petsIn = (caseId) => pets.data.pets.filter((p) => p.caseId === caseId);
+// 1ぴきだけで くらす むし（alone）が いる ケースは ほかの むしを いれられない
+const hasAlone = (caseId) => petsIn(caseId).some((p) => SPECIES[p.species].alone);
+const capacityOf = (c) => (hasAlone(c.id) ? 1 : CASES[c.type].capacity);
 
 // rebuild：ケース（おきもの）も つくりなおす
 function syncRoom(rebuild) {
@@ -415,7 +432,7 @@ function renderPets() {
     const b = document.createElement('button');
     const danger = petsIn(c.id).some((p) => moodOf(p).danger);
     b.className = 'case-tab' + (c.id === pets.caseId ? ' active' : '') + (danger ? ' danger' : '');
-    b.textContent = `${danger ? '⚠️ ' : ''}${def.name}（${petsIn(c.id).length}/${def.capacity}）`;
+    b.textContent = `${danger ? '⚠️ ' : ''}${def.name}（${petsIn(c.id).length}/${capacityOf(c)}）`;
     b.addEventListener('click', () => switchCase(c.id));
     tabs.appendChild(b);
   }
@@ -560,6 +577,7 @@ function openShop(tab) {
       rows.push(shopRow({
         icon: sp.icon, name: `${sp.name}${sp.larva ? '（ようちゅう）' : ''}`, price: sp.price, points,
         desc: locked ? `🔒 ${caseName}が ひつよう`
+          : sp.alone ? `せいちゅうで くるよ。${caseName}に 1ぴきだけで すむ（${sp.adultSize}mm）`
           : sp.larva ? `${sp.larva + sp.pupa}にち べんきょうすると せいちゅうに。${sp.size[0]}〜${sp.size[1]}mm` : 'すぐ ケースで あそべる',
         locked, action: `bug:${k}`,
       }));
@@ -644,10 +662,12 @@ function buy(action) {
   }
   const sp = SPECIES[key];
   // いまの ケースに はいれば そこ、だめなら はいれる ケースを さがす
-  const fits = (c) => CASES[c.type].size >= sp.caseSize && petsIn(c.id).length < CASES[c.type].capacity;
+  // alone の むしは なにも いない ケースに 1ぴきだけ。alone の むしが いる ケースには ほかの むしは はいれない
+  const fits = (c) => CASES[c.type].size >= sp.caseSize && !hasAlone(c.id)
+    && (sp.alone ? petsIn(c.id).length === 0 : petsIn(c.id).length < CASES[c.type].capacity);
   const target = fits(currentCase()) ? currentCase() : pets.data.cases.find(fits);
   if (!target) {
-    toast('はいれる ケースが ないよ。ケースを かおう');
+    toast(sp.alone ? `からっぽの ${CASES.L.name}が ひつようだよ（${sp.name}は 1ぴきだけで すむ）` : 'はいれる ケースが ないよ。ケースを かおう');
     return;
   }
   confirmDialog(`${sp.name}${sp.larva ? 'の ようちゅう' : ''}を ${sp.price}pt で かう？`, () => {

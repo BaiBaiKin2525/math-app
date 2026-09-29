@@ -306,6 +306,7 @@ const LOOK = {
     fin: { color: 0x8c948f, tip: 0xc8b28e, opacity: 0.8, dorsal: { t: [0.04, 0.3], h: 0.07, sweep: 0.6 }, anal: { t: [0.02, 0.4], h: 0.085, sweep: 0.6 },
       tail: { len: 0.14, span: 0.08, kind: 'round' }, pect: 0.07, pelvic: 0.04 },
     amp: 0.045, swim: { speed: 0.35, depth: [0.62, 0.96], cruise: true },
+    model: { metal: 0.45, rough: 0.32, env: 1.0 },
   },
 };
 // きんぎょの なかま（モデルが よめない ときの かたちと、およぎかた）
@@ -546,9 +547,11 @@ function buildModelFish(species, seed) {
       o.material.color.multiply(tint);
       // へやの うつりこみで しろっぽく ならない ように、つやは ひかえめ。
       // うろこの でこぼこ（ほうせん マップ）は はなさきで すじが でるので つかわない（もようで かげを つけてある）
-      o.material.envMapIntensity = 0.85;
-      o.material.roughness = Math.max(o.material.roughness, 0.5);
-      o.material.metalness = 0;
+      // L.model：しゅるいごとの つや（アロワナは ぎんいろに ひかる）
+      const M = L.model || {};
+      o.material.envMapIntensity = M.env ?? 0.85;
+      o.material.roughness = M.rough ?? Math.max(o.material.roughness, 0.5);
+      o.material.metalness = M.metal ?? 0;
       o.material.normalMap = null;
       bend(o.material, U, false);
       body = o;

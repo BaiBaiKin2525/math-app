@@ -588,7 +588,7 @@ function buildPupa(species) {
 // ---------- Blender で つくった むし（models/bug_*.glb） ----------
 // よみこめた しゅるいは そちらを つかう。まだ・よめない ときは プログラムで つくった むし
 // larva・pupa は どの こうちゅうの ようちゅう・さなぎにも つかう
-const BUG_NAMES = ['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa', 'ant', 'dango', 'larva', 'pupa'];
+const BUG_NAMES = ['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa', 'ant', 'dango', 'larva', 'pupa', 'caucasus', 'hercules'];
 const BUGS = {};
 // ケースの なかの もの（blender/props.py）：まるた・おちば・とまりぎ
 const CASE_PROPS = ['log', 'leaves', 'perch'];
@@ -698,8 +698,8 @@ function buildBugModel(species, sizeRatio) {
     } else if (jaw) {
       o.scale.setScalar(k);
       jaws.push({ pivot: o, s: jaw[1] === 'L' ? 1 : -1 });
-    } else if (o.name === 'horn') {
-      o.scale.setScalar(k);
+    } else if (o.name === 'horn' || o.name === 'horn_T') {
+      o.scale.setScalar(k);   // horn_T：むねの つの（コーカサス・ヘラクレス）
     } else if (o.name === 'head') {
       head = o;
     } else if (o.name === 'body') {
@@ -761,7 +761,8 @@ function buildModel(p) {
   if (BUGS[p.species]) return buildBugModel(p.species, p.sizeRatio ?? 0.5);
   if (p.species === 'ant') return buildAnt();
   if (p.species === 'dango') return buildDango();
-  return buildBeetle(p.species, p.sizeRatio ?? 0.5);
+  // がいこくの カブトムシは モデルが よめない ときは カブトムシの かたちで
+  return buildBeetle(BEETLE_STYLE[p.species] ? p.species : 'kabuto', p.sizeRatio ?? 0.5);
 }
 
 // ずかん よう：1ぴきを くるくる まわして みせる
