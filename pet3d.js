@@ -584,11 +584,118 @@ function buildPupa(species) {
   return { group: g, legs: [] };
 }
 
+// ---------- Blender で つくった むし（models/bug_*.glb） ----------
+// よみこめた しゅるいは そちらを つかう。まだ・よめない ときは プログラムで つくった むし
+const BUG_NAMES = ['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa'];
+const BUGS = {};
+const bugListeners = new Set();
+let bugsLoading = null;
+
+export function loadBugs() {
+  if (!bugsLoading) {
+    bugsLoading = (async () => {
+      const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
+        import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm'),
+        import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js/+esm'),
+      ]);
+      const loader = new GLTFLoader();
+      loader.setMeshoptDecoder(MeshoptDecoder);
+      await Promise.all(BUG_NAMES.map((n) => loader.loadAsync(`models/bug_${n}.glb`)
+        .then((g) => { BUGS[n] = bakeMeshes(g.scene); })
+        .catch((e) => console.warn(`bug_${n}.glb を よみこめませんでした`, e))));
+      bugListeners.forEach((fn) => fn());
+    })().catch((e) => console.warn('むしの モデルを よみこめませんでした', e));
+  }
+  return bugsLoading;
+}
+
+// かるく する ときに かたちが ちいさな かずに まとめられ、いちと おおきさが メッシュに ついている。
+// それを かたちに もどして、メッシュの いちは 0 に する（あし などの ふしの いちは おやの から が もっている）
+function bakeMeshes(root) {
+  root.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = o.matrix;
+    const nm = new THREE.Matrix3().getNormalMatrix(m);
+    const src = o.geometry.attributes;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(src.position.count * 3);
+    for (let i = 0; i < src.position.count; i++) {
+      v.fromBufferAttribute(src.position, i).applyMatrix4(m);
+      pos.set([v.x, v.y, v.z], i * 3);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    if (src.normal) {
+      const nor = new Float32Array(src.normal.count * 3);
+      for (let i = 0; i < src.normal.count; i++) {
+        v.fromBufferAttribute(src.normal, i).applyMatrix3(nm).normalize();
+        nor.set([v.x, v.y, v.z], i * 3);
+      }
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    }
+    if (src.uv) {
+      const uv = new Float32Array(src.uv.count * 2);
+      for (let i = 0; i < src.uv.count; i++) uv.set([src.uv.getX(i), src.uv.getY(i)], i * 2);
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    }
+    if (o.geometry.index) geo.setIndex(o.geometry.index.clone());
+    if (!src.normal) geo.computeVertexNormals();
+    o.geometry.dispose();
+    o.geometry = geo;
+    o.position.set(0, 0, 0);
+    o.quaternion.identity();
+    o.scale.set(1, 1, 1);
+    o.material.envMapIntensity = 0.6; // うつりこみが つよいと くろい からが はいいろに みえる
+  });
+  return root;
+}
+
+// Blender の こうちゅう：あし・しょっかく・あご・つのの ふしを さがして うごかす
+function buildBugModel(species, sizeRatio) {
+  const g = BUGS[species].clone(true);
+  const legs = [];
+  const antennae = [];
+  const jaws = [];
+  let head = null;
+  const k = 0.55 + 0.7 * sizeRatio; // おおきい こほど つの・あごが ながい
+  g.traverse((o) => {
+    const leg = o.name.match(/^leg_(\d)_([LR])$/);
+    const jaw = o.name.match(/^jaw_([LR])$/);
+    if (leg) {
+      const side = leg[2] === 'L' ? 1 : -1;
+      o.userData = { side, phase: (Number(leg[1]) + (side > 0 ? 1 : 0)) % 2 ? Math.PI : 0 };
+      legs.push(o);
+    } else if (/^ant_[LR]$/.test(o.name)) {
+      antennae.push(o);
+    } else if (jaw) {
+      o.scale.setScalar(k);
+      jaws.push({ pivot: o, s: jaw[1] === 'L' ? 1 : -1 });
+    } else if (o.name === 'horn') {
+      o.scale.setScalar(k);
+    } else if (o.name === 'head') {
+      head = o;
+    }
+  });
+  const phase = Math.random() * 10;
+  const anim = (t) => {
+    antennae.forEach((a, i) => {
+      a.rotation.y = Math.sin(t * 2.2 + phase + i * 2) * 0.18;
+      a.rotation.x = Math.sin(t * 1.3 + phase + i) * 0.1;
+    });
+    const open = Math.max(0, Math.sin(t * 0.8 + phase) - 0.6) * 0.9;
+    for (const j of jaws) j.pivot.rotation.y = j.s * open;
+    if (head) head.rotation.x = Math.sin(t * 0.6 + phase) * 0.05;
+  };
+  return { group: g, legs, anim };
+}
+
 function buildModel(p) {
   if (p.stage === 'larva') return buildLarva();
   if (p.stage === 'pupa') return buildPupa(p.species);
   if (p.species === 'ant') return buildAnt();
   if (p.species === 'dango') return buildDango();
+  if (BUGS[p.species]) return buildBugModel(p.species, p.sizeRatio ?? 0.5);
   return buildBeetle(p.species, p.sizeRatio ?? 0.5);
 }
 
@@ -994,6 +1101,25 @@ export function createInsectRoom(container, { onSelect }) {
     }
   }
 
+  const onBugs = () => {
+    for (const a of [...actors.values()]) {
+      if (a.pet.stage !== 'adult' || !BUGS[a.pet.species]) continue;
+      const pos = a.g.position.clone();
+      const rotY = a.g.rotation.y;
+      const p = a.pet;
+      removeActor(p.id);
+      addActor(p);
+      const b = actors.get(p.id);
+      if (b.walker) {
+        b.g.position.copy(pos);
+        b.g.rotation.y = rotY;
+      }
+    }
+    select(selected);
+  };
+  bugListeners.add(onBugs);
+  loadBugs();
+
   function select(id) {
     selected = id;
     const a = id && actors.get(id);
@@ -1233,6 +1359,7 @@ export function createInsectRoom(container, { onSelect }) {
   loop();
 
   function dispose() {
+    bugListeners.delete(onBugs);
     cancelAnimationFrame(raf);
     ro.disconnect();
     controls.dispose();

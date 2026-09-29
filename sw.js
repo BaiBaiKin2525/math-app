@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v35';
+const VERSION = 'v36';
 const FILES = [
   './',
   'index.html',
@@ -61,6 +61,12 @@ const FILES = [
   'models/prop_heater.glb',
   'models/prop_airpump.glb',
   'models/prop_airstone.glb',
+  'models/bug_kabuto.glb',
+  'models/bug_kanabun.glb',
+  'models/bug_kokuwa.glb',
+  'models/bug_nokogiri.glb',
+  'models/bug_miyama.glb',
+  'models/bug_ookuwa.glb',
   'settings.js',
   'manifest.json',
   'icons/icon-192.png',

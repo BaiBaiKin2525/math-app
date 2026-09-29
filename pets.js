@@ -360,6 +360,8 @@ async function mountRoom() {
   try {
     if (/[?&]flat=1/.test(location.search)) throw new Error('URL の flat=1 で かんたん ひょうじを えらんでいます');
     const mod = await import('./pet3d.js');
+    // Blender の むしを すこし まつ（まにあわなければ あとで おきかわる）
+    await Promise.race([mod.loadBugs(), new Promise((r) => setTimeout(r, 5000))]);
     if (!$('pets').classList.contains('active')) return;
     if (pets.room) pets.room.dispose();
     pets.room = mod.createInsectRoom(box, { onSelect });
@@ -762,6 +764,7 @@ async function mountZukanModel(opts) {
   disposeZukanModel();
   try {
     const mod = await import('./pet3d.js');
+    await Promise.race([mod.loadBugs(), new Promise((r) => setTimeout(r, 4000))]);
     const box = $('zukan-3d');
     if (!box || $('zukan').classList.contains('hidden')) return;
     disposeZukanModel();
