@@ -162,9 +162,13 @@ function renderHomeBar() {
       ${s.streak >= 2 ? `<span class="streak">🔥 ${s.streak}にち れんぞく</span>` : ''}
     </div>
     <div class="points-chip">⭐ <b>${s.points}</b> pt</div>
-    <button id="pets-btn" class="pets-btn">🐜 むしの おへや</button>`;
+    <div class="room-btns">
+      <button id="pets-btn" class="pets-btn">🐜 むしの おへや</button>
+      <button id="fish-btn" class="pets-btn fish-btn">🐟 さかなの おへや</button>
+    </div>`;
   $('who-btn').addEventListener('click', renderWho);
   $('pets-btn').addEventListener('click', openPets);
+  $('fish-btn').addEventListener('click', openFish);
 }
 
 // けっか がめんの ポイント

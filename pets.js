@@ -668,8 +668,9 @@ function closeShop() {
   $('shop').classList.add('hidden');
 }
 
-function confirmDialog(text, onYes) {
+function confirmDialog(text, onYes, yes = 'かう！') {
   $('confirm-text').textContent = text;
+  $('confirm-yes').textContent = yes;
   $('confirm').classList.remove('hidden');
   $('confirm-yes').onclick = () => {
     $('confirm').classList.add('hidden');

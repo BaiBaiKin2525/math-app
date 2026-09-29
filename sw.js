@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v27';
+const VERSION = 'v28';
 const FILES = [
   './',
   'index.html',
@@ -29,6 +29,8 @@ const FILES = [
   'flatroom.js',
   'pets.js',
   'pet3d.js',
+  'fish.js',
+  'fish3d.js',
   'settings.js',
   'manifest.json',
   'icons/icon-192.png',
