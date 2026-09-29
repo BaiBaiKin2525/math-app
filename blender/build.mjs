@@ -21,7 +21,7 @@ const MODELS = [
   ['blender/fishgen.py', 'angel_1', ['angel', 1]],
   ['blender/fishgen.py', 'arowana_1', ['arowana', 1]],
   // すいそうの なかの もの（blender/props.py）
-  ...['vallis', 'sword', 'cabomba', 'rocks', 'driftwood', 'shells', 'castle', 'ship', 'filter', 'heater', 'airpump', 'airstone']
+  ...['vallis', 'sword', 'cabomba', 'rocks', 'driftwood', 'shells', 'castle', 'ship', 'filter', 'heater', 'airpump', 'airstone', 'log', 'leaves', 'perch']
     .map((n) => ['blender/props.py', `prop_${n}`, [n]]),
   // むし（blender/insects.py）
   ...['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa'].map((n) => ['blender/insects.py', `bug_${n}`, [n]]),

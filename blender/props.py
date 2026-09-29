@@ -825,10 +825,149 @@ def build_airstone():
     return out
 
 
+# ---------- むしの ケースの なか ----------
+
+def ring_texture():
+    """まるたの きりくち：としわ"""
+    W = H = 128
+    U, Vv = np.meshgrid((np.arange(W) + 0.5) / W - 0.5, (np.arange(H) + 0.5) / H - 0.5)
+    r = np.hypot(U, Vv) * 2
+    n = fbm(W, H, 4, 3)
+    rings = np.sin((r * 9 + n * 0.8) * math.pi * 2) * 0.5 + 0.5
+    col = mix(rgb(0.62, 0.46, 0.3), rgb(0.78, 0.62, 0.42), rings * 0.6 + n * 0.4)
+    col = mix(col, rgb(0.3, 0.2, 0.12), smoothstep(0.85, 0.98, r))
+    return image('woodend', col)
+
+
+def build_log():
+    """よこに ねた まるた：ながさ 1（x）、はんけい 0.0725。アプリで ケースの はばに あわせて のばす"""
+    bark = material('bark', bark_texture(), rough=0.9)
+    end = material('woodend', ring_texture(), rough=0.8)
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    path = [np.array([x, 0, 0]) for x in np.linspace(-0.5, 0.5, 24)]
+    radii = [0.0725 * (1 + 0.05 * math.sin(i * 1.3) + 0.03 * rng.normal()) for i in range(24)]
+    tube(bm, uvl, path, radii, ring=18, vscale=4, cap=False, wobble=0.04)
+    # こぶ
+    for x, a in ((-0.2, 1.0), (0.15, 2.4), (0.32, 4.2)):
+        c = np.array([x, math.sin(a) * 0.07, math.cos(a) * 0.07])
+        displaced_blob(bm, uvl, c, (0.02, 0.02, 0.02), int(x * 100) + 50, rough=0.3, flat=-2, subdiv=2)
+    out = [obj('log', bm, bark)]
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    for x, r in ((-0.5, radii[0]), (0.5, radii[-1])):
+        c = bm.verts.new(P(x, 0, 0))
+        ring = [bm.verts.new(P(x, math.sin(a) * r, math.cos(a) * r)) for a in np.linspace(0, 2 * math.pi, 18, endpoint=False)]
+        for j in range(18):
+            f = bm.faces.new((ring[j], ring[(j + 1) % 18], c))
+            for loop in f.loops:
+                co = loop.vert.co
+                loop[uvl].uv = (0.5 + (-co.y) / (2 * r) * 0.95, 0.5 + co.z / (2 * r) * 0.95)
+    out.append(obj('logend', bm, end))
+    return out
+
+
+def leaf_mesh(bm, uvl, length, width, curl, twist, rot):
+    """はっぱ 1まい（ながさ length、ねもとが 0）。u＝よこ、v＝ながさ"""
+    rows, uvs = [], []
+    for i in range(13):
+        t = i / 12
+        row, urow = [], []
+        for j in range(7):
+            u = j / 6
+            x = (u - 0.5) * width
+            z = t * length
+            y = curl * (x * x) * 8 + math.sin(t * math.pi) * twist
+            ca, sa = math.cos(rot), math.sin(rot)
+            row.append((x * ca - z * sa, y + 0.02, x * sa + z * ca))
+            urow.append((u, t))
+        rows.append(row)
+        uvs.append(urow)
+    grid(bm, uvl, rows, uvs)
+
+
+def dry_leaf_texture(fresh=False):
+    """クヌギの はっぱ：ほそながく、ふちが ぎざぎざ（ぬきで かく）"""
+    W, H = 128, 256
+    U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
+    halfw = 0.46 * np.sin(np.pi * np.clip(Vv * 1.05, 0, 1)) ** 0.7
+    teeth = 0.03 * np.abs(np.sin(Vv * 40))
+    inside = np.abs(U - 0.5) < (halfw - teeth)
+    n = fbm(W, H, 4, 4)
+    if fresh:
+        col = mix(rgb(0.2, 0.42, 0.14), rgb(0.36, 0.6, 0.22), n)
+    else:
+        col = mix(rgb(0.46, 0.28, 0.12), rgb(0.7, 0.5, 0.26), n)
+        col = mix(col, rgb(0.34, 0.2, 0.1), smoothstep(0.55, 0.7, fbm(W, H, 6, 3)) * 0.6)
+    mid = smoothstep(0.02, 0.0, np.abs(U - 0.5))
+    side = smoothstep(0.03, 0.0, np.abs(((Vv * 12) - np.abs(U - 0.5) * 6) % 1 - 0.5) - 0.46) * (np.abs(U - 0.5) < halfw * 0.9)
+    col = col * (1 - 0.25 * np.maximum(mid, side)[..., None])
+    return image('leaf_fresh' if fresh else 'leaf_dry', col, inside.astype(float))
+
+
+def build_leaves():
+    """おちば 5まい（べつべつ。アプリで ばらまく）"""
+    mat = material('leaf', dry_leaf_texture(), rough=0.8, alpha=True)
+    out = []
+    for i in range(5):
+        bm = bmesh.new()
+        uvl = bm.loops.layers.uv.new('UVMap')
+        leaf_mesh(bm, uvl, 1.0, 0.36 + rng.random() * 0.08, 0.12 + rng.random() * 0.2, 0.05 + rng.random() * 0.06, 0)
+        out.append(obj(f'leaf_{i}', bm, mat))
+    return out
+
+
+def build_perch():
+    """とまりぎ（cm）：むしが のぼる みちは アプリの とおり（ねもと → (1, 11, 2.5)）"""
+    bark = material('bark', bark_texture(), rough=0.88)
+    end = material('woodend', ring_texture(), rough=0.8)
+    leafm = material('leaf', dry_leaf_texture(fresh=True), rough=0.6, alpha=True)
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    main = [np.array([0, 0, 0]) + np.array([1, 11, 2.5]) * t + np.array([math.sin(t * 5) * 0.15, 0, math.cos(t * 4) * 0.1]) for t in np.linspace(0, 1, 16)]
+    tube(bm, uvl, main, [0.62 - 0.3 * t for t in np.linspace(0, 1, 16)], ring=12, vscale=0.2, wobble=0.08)
+    twig = [np.array([0.5, 6, 1.2]) + np.array([2.7, 2.2, 0.3]) * t for t in np.linspace(0, 1, 8)]
+    tube(bm, uvl, twig, [0.3 - 0.12 * t for t in np.linspace(0, 1, 8)], ring=8, vscale=0.2)
+    cylinder(bm, uvl, (0, 0, 0), 1.0, 1.9, 1.6, seg=16, uv_scale=0.2, cap=False)
+    out = [obj('perch', bm, bark)]
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    c = bm.verts.new(P(0, 1.0, 0))
+    ring = [bm.verts.new(P(math.cos(a) * 1.6, 1.0, math.sin(a) * 1.6)) for a in np.linspace(0, 2 * math.pi, 16, endpoint=False)]
+    for j in range(16):
+        f = bm.faces.new((ring[j], ring[(j + 1) % 16], c))
+        for loop in f.loops:
+            co = loop.vert.co
+            loop[uvl].uv = (0.5 + co.x / 3.4, 0.5 - co.y / 3.4)
+    out.append(obj('perchend', bm, end))
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    for base, dirs in (((3.2, 8.2, 1.5), (0.3, 1.2, 2.2, 3.6)), ((1.0, 11.0, 2.5), (0.8, 2.0, 3.1, 4.4, 5.4))):
+        for a in dirs:
+            rows, uvs = [], []
+            L, Wd = 2.6, 0.9
+            for i in range(9):
+                t = i / 8
+                row, urow = [], []
+                for j in range(5):
+                    u = j / 4
+                    x = (u - 0.5) * Wd
+                    z = t * L
+                    y = -0.6 * t * t + 0.15 * (x * x) * 4
+                    row.append((base[0] + x * math.cos(a) + z * math.sin(a), base[1] + y + 0.3 * t, base[2] - x * math.sin(a) + z * math.cos(a)))
+                    urow.append((u, t))
+                rows.append(row)
+                uvs.append(urow)
+            grid(bm, uvl, rows, uvs)
+    out.append(obj('plant_leaf', bm, leafm))
+    return out
+
+
 BUILDERS = {
     'vallis': build_vallis, 'sword': build_sword, 'cabomba': build_cabomba,
     'rocks': build_rocks, 'driftwood': build_driftwood, 'shells': build_shells, 'castle': build_castle, 'ship': build_ship,
     'filter': build_filter, 'heater': build_heater, 'airpump': build_airpump, 'airstone': build_airstone,
+    'log': build_log, 'leaves': build_leaves, 'perch': build_perch,
 }
 
 

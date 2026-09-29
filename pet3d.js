@@ -7,6 +7,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm';
 import { RoomEnvironment } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js/+esm';
+import { RoundedBoxGeometry } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js/+esm';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -588,7 +589,25 @@ function buildPupa(species) {
 // よみこめた しゅるいは そちらを つかう。まだ・よめない ときは プログラムで つくった むし
 const BUG_NAMES = ['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa'];
 const BUGS = {};
+// ケースの なかの もの（blender/props.py）：まるた・おちば・とまりぎ
+const CASE_PROPS = ['log', 'leaves', 'perch'];
+const PROPS = {};
 const bugListeners = new Set();
+
+// Blender の ものの コピー。うすい はっぱは ぬきで かく
+function propClone(name) {
+  const src = PROPS[name];
+  if (!src) return null;
+  const g = src.clone(true);
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    if (o.material.transparent || o.name.includes('leaf')) {
+      o.material = o.material.clone();
+      Object.assign(o.material, { transparent: false, alphaTest: 0.5, side: THREE.DoubleSide });
+    }
+  });
+  return g;
+}
 let bugsLoading = null;
 
 export function loadBugs() {
@@ -600,9 +619,14 @@ export function loadBugs() {
       ]);
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
-      await Promise.all(BUG_NAMES.map((n) => loader.loadAsync(`models/bug_${n}.glb`)
-        .then((g) => { BUGS[n] = bakeMeshes(g.scene); })
-        .catch((e) => console.warn(`bug_${n}.glb を よみこめませんでした`, e))));
+      await Promise.all([
+        ...BUG_NAMES.map((n) => loader.loadAsync(`models/bug_${n}.glb`)
+          .then((g) => { BUGS[n] = bakeMeshes(g.scene); })
+          .catch((e) => console.warn(`bug_${n}.glb を よみこめませんでした`, e))),
+        ...CASE_PROPS.map((n) => loader.loadAsync(`models/prop_${n}.glb`)
+          .then((g) => { PROPS[n] = bakeMeshes(g.scene); })
+          .catch((e) => console.warn(`prop_${n}.glb を よみこめませんでした`, e))),
+      ]);
       bugListeners.forEach((fn) => fn());
     })().catch((e) => console.warn('むしの モデルを よみこめませんでした', e));
   }
@@ -765,65 +789,230 @@ export function createModelViewer(container, { species, stage = 'adult', sizeRat
 // つちの あつさ（cm）。ようちゅう・さなぎは つちの なかの ガラスぎわに いて、よこから みえる
 export const SOIL = 9;
 
+// ---------- マット・つくえの がぞう（キャンバスで 1かいだけ つくる） ----------
+let CASE_TEX = null;
+function heightToNormal(hx, W, strength) {
+  const src = hx.getImageData(0, 0, W, W).data;
+  const hAt = (x, y) => src[(((y + W) % W) * W + ((x + W) % W)) * 4] / 255;
+  const c = document.createElement('canvas');
+  c.width = c.height = W;
+  const cx = c.getContext('2d');
+  const img = cx.createImageData(W, W);
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const dx = (hAt(x + 1, y) - hAt(x - 1, y)) * strength;
+      const dy = (hAt(x, y + 1) - hAt(x, y - 1)) * strength;
+      const l = Math.hypot(dx, dy, 1);
+      const i = (y * W + x) * 4;
+      img.data[i] = (-dx / l * 0.5 + 0.5) * 255;
+      img.data[i + 1] = (dy / l * 0.5 + 0.5) * 255;
+      img.data[i + 2] = (1 / l * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  cx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function caseTextures() {
+  if (CASE_TEX) return CASE_TEX;
+  const W = 256;
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = W;
+    return [c, c.getContext('2d')];
+  };
+  // マット：くさった きの こまかい せんいと、あかるい きの かけら
+  const [mc, mx] = mk();
+  const [, hx] = mk();
+  mx.fillStyle = '#3f2616';
+  mx.fillRect(0, 0, W, W);
+  hx.fillStyle = '#606060';
+  hx.fillRect(0, 0, W, W);
+  const fib = ['#6b4428', '#3a2212', '#7a5234', '#2c1a0e', '#8a6240', '#50301a'];
+  const each = (fn) => {
+    for (const ox of [-W, 0, W]) for (const oy of [-W, 0, W]) fn(ox, oy);
+  };
+  for (let i = 0; i < 2600; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * W;
+    const a = Math.random() * Math.PI * 2;
+    const L = 2 + Math.random() * 6;
+    const col = fib[Math.floor(Math.random() * fib.length)];
+    const hv = 60 + Math.random() * 150;
+    const lw = 0.6 + Math.random() * 1.4;
+    each((ox, oy) => {
+      for (const [ctx, style] of [[mx, col], [hx, `rgb(${hv | 0},${hv | 0},${hv | 0})`]]) {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        ctx.moveTo(x + ox, y + oy);
+        ctx.quadraticCurveTo(x + ox + Math.cos(a + 0.6) * L * 0.5, y + oy + Math.sin(a + 0.6) * L * 0.5, x + ox + Math.cos(a) * L, y + oy + Math.sin(a) * L);
+        ctx.stroke();
+      }
+    });
+  }
+  for (let i = 0; i < 180; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * W;
+    const a = Math.random() * Math.PI;
+    const L = 3 + Math.random() * 5;
+    const col = ['#b08a5a', '#9a7448', '#c49c68'][i % 3];
+    each((ox, oy) => {
+      for (const [ctx, style] of [[mx, col], [hx, '#e0e0e0']]) {
+        ctx.save();
+        ctx.translate(x + ox, y + oy);
+        ctx.rotate(a);
+        ctx.fillStyle = style;
+        ctx.fillRect(-L / 2, -0.9, L, 1.8);
+        ctx.restore();
+      }
+    });
+  }
+  const mat = new THREE.CanvasTexture(mc);
+  mat.wrapS = mat.wrapT = THREE.RepeatWrapping;
+  mat.colorSpace = THREE.SRGBColorSpace;
+  // つくえの もくめ
+  const [wc, wx] = mk();
+  wx.fillStyle = '#d8bf98';
+  wx.fillRect(0, 0, W, W);
+  for (let i = 0; i < 70; i++) {
+    const y = Math.random() * W;
+    wx.strokeStyle = `rgba(${130 + Math.random() * 30},${95 + Math.random() * 20},60,${0.1 + Math.random() * 0.15})`;
+    wx.lineWidth = 0.6 + Math.random() * 2;
+    wx.beginPath();
+    for (let x = 0; x <= W; x += 8) wx.lineTo(x, y + Math.sin(x * 0.03 + i) * 3);
+    wx.stroke();
+  }
+  const wood = new THREE.CanvasTexture(wc);
+  wood.wrapS = wood.wrapT = THREE.RepeatWrapping;
+  wood.colorSpace = THREE.SRGBColorSpace;
+  CASE_TEX = { mat, matN: heightToNormal(hx, W, 3.5), wood };
+  return CASE_TEX;
+}
+
+const tex = (t, rx, ry) => {
+  const c = t.clone();
+  c.needsUpdate = true;
+  c.repeat.set(rx, ry);
+  return c;
+};
+
 function buildCase(dims) {
   const [w, d, h] = dims;
+  const T = caseTextures();
   const g = new THREE.Group();
-  const table = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), std(0xe6d5b8, { roughness: 0.9 }));
+  // つくえ
+  const table = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), std(0xffffff, { map: tex(T.wood, 10, 10), roughness: 0.75 }));
   table.rotation.x = -Math.PI / 2;
-  table.position.y = -SOIL - 0.01;
+  table.position.y = -SOIL - 0.3;
   g.add(table);
-  // つちの よこの めんは すこし すけて、なかの ようちゅうが みえる
-  const soilTop = std(0x5a3920, { roughness: 1 });
-  const soilSide = new THREE.MeshStandardMaterial({ color: 0x3e2412, roughness: 1, transparent: true, opacity: 0.62, depthWrite: false });
-  const soilBack = std(0x2e1a0c, { roughness: 1 });
-  // めんの じゅんばん：+x, -x, うえ, した, まえ, うしろ（うしろは すけない）
-  const soil = new THREE.Mesh(new THREE.BoxGeometry(w, SOIL, d), [soilSide, soilSide, soilTop, soilTop, soilSide, soilBack]);
-  soil.position.y = -SOIL / 2;
+  // マット：うえは ふんわり でこぼこ、ガラスぎわが すこし たかい
+  const topGeo = new THREE.PlaneGeometry(w - 0.3, d - 0.3, Math.ceil(w / 1.2), Math.ceil(d / 1.2));
+  topGeo.rotateX(-Math.PI / 2);
+  const tp = topGeo.attributes.position;
+  for (let i = 0; i < tp.count; i++) {
+    const x = tp.getX(i);
+    const z = tp.getZ(i);
+    const edge = Math.max(Math.abs(x) / (w / 2), Math.abs(z) / (d / 2));
+    const bump = Math.sin(x * 0.9) * Math.sin(z * 1.1) * 0.12 + Math.sin(x * 2.3 + z * 1.7) * 0.06;
+    tp.setY(i, bump + Math.max(0, edge - 0.85) * 3);
+  }
+  topGeo.computeVertexNormals();
+  const topMat = std(0xffffff, { map: tex(T.mat, w / 9, d / 9), normalMap: tex(T.matN, w / 9, d / 9), roughness: 1, envMapIntensity: 0.3 });
+  g.add(new THREE.Mesh(topGeo, topMat));
+  // つちの よこの めんは すこし すけて、なかの ようちゅうが みえる（うしろは すけない）
+  const sideMat = new THREE.MeshStandardMaterial({ color: 0xb09080, map: tex(T.mat, w / 9, SOIL / 9), roughness: 1, transparent: true, opacity: 0.72, depthWrite: false });
+  const backMat = std(0x9a8070, { map: tex(T.mat, w / 9, SOIL / 9), roughness: 1 });
+  const hidden = new THREE.MeshBasicMaterial({ visible: false });
+  // めんの じゅんばん：+x, -x, うえ, した, まえ, うしろ
+  // うえの めんの ふちが もりあがる ぶん（0.5）だけ たかく する
+  const soil = new THREE.Mesh(new THREE.BoxGeometry(w - 0.3, SOIL + 0.5, d - 0.3), [sideMat, sideMat, hidden, hidden, sideMat, backMat]);
+  soil.position.y = -SOIL / 2 + 0.25;
   soil.renderOrder = 1;
   g.add(soil);
+  // きの かけら
+  const chips = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.12, 0.35), std(0xffffff, { roughness: 0.9 }), Math.round((w * d) / 14));
+  const m = new THREE.Matrix4();
+  const c = new THREE.Color();
+  for (let i = 0; i < chips.count; i++) {
+    const s = 0.4 + Math.random() * 0.8;
+    m.compose(V((Math.random() - 0.5) * (w - 1), 0.12, (Math.random() - 0.5) * (d - 1)),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler((Math.random() - 0.5) * 0.4, Math.random() * 6, (Math.random() - 0.5) * 0.4)), V(s, s, s));
+    chips.setMatrixAt(i, m);
+    chips.setColorAt(i, c.set([0xa07a4a, 0x7a5634, 0xc09a68][i % 3]));
+  }
+  g.add(chips);
+  // ケース：かどの まるい すける プラスチック
   const glassH = h - 3 + SOIL;
-  const glass = new THREE.Mesh(
-    new THREE.BoxGeometry(w, glassH, d),
-    new THREE.MeshStandardMaterial({ color: 0xdff3ff, transparent: true, opacity: 0.12, roughness: 0.1, depthWrite: false, side: THREE.BackSide }),
-  );
-  glass.position.y = glassH / 2 - SOIL;
-  g.add(glass);
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, glassH, d)), new THREE.LineBasicMaterial({ color: 0x8fb4c8 }));
-  edges.position.copy(glass.position);
+  const shell = new RoundedBoxGeometry(w + 0.4, glassH, d + 0.4, 3, Math.min(1.2, w * 0.04));
+  for (const [side, op, order] of [[THREE.BackSide, 0.08, 2], [THREE.FrontSide, 0.1, 6]]) {
+    const gl = new THREE.Mesh(shell, new THREE.MeshPhysicalMaterial({
+      color: 0xe8f6ff, transparent: true, opacity: op, roughness: 0.04, envMapIntensity: 1.5, depthWrite: false, side,
+    }));
+    gl.position.y = glassH / 2 - SOIL;
+    gl.renderOrder = order;
+    g.add(gl);
+  }
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.4, glassH, d + 0.4)), new THREE.LineBasicMaterial({ color: 0xa8c8d8, transparent: true, opacity: 0.6 }));
+  edges.position.y = glassH / 2 - SOIL;
   g.add(edges);
-  // ふたは ふちだけ（うえから のぞける ように）
-  const frame = std(0x2f7d4f, { roughness: 0.5 });
+  // ふた：まるい みどりの ふちと とって（うえから のぞける ように まんなかは あけて おく）
+  const frame = new THREE.MeshPhysicalMaterial({ color: 0x2f8a55, roughness: 0.35, clearcoat: 0.5, envMapIntensity: 0.8 });
   const top = h - 3 + 0.4;
-  for (const [fw, fd, x, z] of [[w + 0.6, 1.2, 0, d / 2], [w + 0.6, 1.2, 0, -d / 2], [1.2, d, w / 2, 0], [1.2, d, -w / 2, 0]]) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.8, fd), frame);
+  for (const [fw, fd, x, z] of [[w + 1.2, 1.6, 0, d / 2], [w + 1.2, 1.6, 0, -d / 2], [1.6, d + 1.2, w / 2, 0], [1.6, d + 1.2, -w / 2, 0]]) {
+    const bar = new THREE.Mesh(new RoundedBoxGeometry(fw, 1.0, fd, 2, 0.35), frame);
     bar.position.set(x, top, z);
     g.add(bar);
   }
-  // とまりぎ と おちば
-  const bark = std(0x6b4a2e, { roughness: 0.9 });
+  const handle = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+    V(-w * 0.28, top + 0.4, d / 2 - 0.2), V(-w * 0.22, top + 1.4, d / 2 + 0.1), V(0, top + 1.8, d / 2 + 0.2), V(w * 0.22, top + 1.4, d / 2 + 0.1), V(w * 0.28, top + 0.4, d / 2 - 0.2),
+  ]), 30, 0.35, 8), frame);
+  g.add(handle);
+  // まるた（ごつごつした きの かわ・きりくちの としわ）。まえに よこむきに おく
   const logR = w * 0.029;
-  const log = new THREE.Mesh(new THREE.CylinderGeometry(logR, logR, w * 0.4, 12), bark);
-  log.rotation.z = Math.PI / 2;
-  log.rotation.y = 0.5;
-  log.position.set(-w * 0.1, logR * 0.75, d * 0.26); // おきものは おくに ならべるので、まるたは てまえ
-  g.add(log);
-  log.updateMatrixWorld(true);
+  const dir = V(Math.cos(0.5), 0, -Math.sin(0.5));
+  const logPos = V(-w * 0.1, logR * 0.75, d * 0.26); // おきものは おくに ならべるので、まるたは てまえ
+  const logModel = propClone('log');
+  if (logModel) {
+    logModel.scale.setScalar(w * 0.4);
+    logModel.rotation.y = 0.5;
+    logModel.position.copy(logPos);
+    g.add(logModel);
+  } else {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(logR, logR, w * 0.4, 12), std(0x6b4a2e, { roughness: 0.9 }));
+    log.rotation.z = Math.PI / 2;
+    log.rotation.y = 0.5;
+    log.position.copy(logPos);
+    g.add(log);
+  }
   // むしが まるたを のりこえる ための かたち（じくの りょうはし・はんけい・たかさ）
   const logShape = {
-    a: log.localToWorld(V(0, w * 0.2, 0)),
-    b: log.localToWorld(V(0, -w * 0.2, 0)),
+    a: logPos.clone().addScaledVector(dir, -w * 0.2),
+    b: logPos.clone().addScaledVector(dir, w * 0.2),
     r: logR,
-    y: log.position.y,
+    y: logPos.y,
   };
-  const leaf = std(0x8a6a2a, { roughness: 0.8, side: THREE.DoubleSide });
-  for (let i = 0; i < 6; i++) {
-    const l = new THREE.Mesh(new THREE.CircleGeometry(1, 12), leaf);
-    l.scale.set(w * 0.03, w * 0.05, 1);
-    l.rotation.set(-Math.PI / 2, 0, i * 1.1);
-    l.position.set((Math.random() - 0.5) * w * 0.8, 0.03 + i * 0.005, (Math.random() - 0.5) * d * 0.8);
+  // おちば
+  const leafCount = PROPS.leaves ? PROPS.leaves.children.filter((o) => o.isMesh).length : 0;
+  for (let i = 0; i < 7; i++) {
+    let l;
+    if (leafCount) {
+      l = propClone('leaves');
+      l.children.forEach((o, k) => (o.visible = k === i % leafCount));
+      l.scale.setScalar(w * (0.08 + Math.random() * 0.04));
+      l.rotation.y = Math.random() * 6.28;
+    } else {
+      l = new THREE.Mesh(new THREE.CircleGeometry(1, 12), std(0x8a6a2a, { roughness: 0.8, side: THREE.DoubleSide }));
+      l.scale.set(w * 0.03, w * 0.05, 1);
+      l.rotation.set(-Math.PI / 2, 0, i * 1.1);
+    }
+    l.position.set((Math.random() - 0.5) * w * 0.8, 0.05 + i * 0.01, (Math.random() - 0.5) * d * 0.8);
     g.add(l);
   }
-  return { group: g, log: logShape };
+  return { group: g, log: logShape, fallback: !logModel };
 }
 
 // (x, z) の じめんの たかさ。まるたの うえなら まるたの ひょうめん
@@ -844,6 +1033,9 @@ function groundHeight(log, x, z) {
 //   stay：さいごで まって もどる／ride：ブランコに のる／hide：おうちに かくれる
 
 function buildPerch() {
+  const path = [V(0, 0, 4), V(0, 1, 0.7), V(0.5, 6, 1.4), V(0.95, 10.4, 2.5)];
+  const model = propClone('perch');
+  if (model) return { group: model, path, speed: [1, 0.6, 0.6, 0.6], stay: 3.5 };
   const g = new THREE.Group();
   const bark = std(0x7a5634, { roughness: 0.9 });
   g.add(rod(bark, V(0, 0, 0), V(1, 11, 2.5), 0.6, 0.35));
@@ -958,6 +1150,8 @@ export function createInsectRoom(container, { onSelect }) {
   controls.maxPolarAngle = 1.35;
 
   let caseGroup = null;
+  let lastCaseArgs = null;
+  let caseFallback = false;
   let caseDims = null;
   let bounds = { x: 10, z: 6 };
   let decors = [];
@@ -981,8 +1175,10 @@ export function createInsectRoom(container, { onSelect }) {
 
   // decor：[{ type, slot }]、slots：おける かず
   function setCase(dims, decor = [], slots = 2) {
+    lastCaseArgs = [dims, decor, slots];
     if (caseGroup) scene.remove(caseGroup);
     const built = buildCase(dims);
+    caseFallback = built.fallback;
     caseGroup = built.group;
     logShape = built.log;
     scene.add(caseGroup);
@@ -1102,6 +1298,7 @@ export function createInsectRoom(container, { onSelect }) {
   }
 
   const onBugs = () => {
+    if (caseFallback && lastCaseArgs) setCase(...lastCaseArgs);
     for (const a of [...actors.values()]) {
       if (a.pet.stage !== 'adult' || !BUGS[a.pet.species]) continue;
       const pos = a.g.position.clone();
