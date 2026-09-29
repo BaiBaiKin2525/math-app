@@ -1153,3 +1153,4 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 .flat-fish.flip { transform: scaleX(-1); }
 .flat-fish.selected { filter: drop-shadow(0 0 6px #ff8a3d); }
 .flat-fish.weak { opacity: .6; }
+.water-meter.crowd .wm-bar i { background: linear-gradient(90deg, #a6d98f, #4aa860); }

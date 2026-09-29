@@ -971,53 +971,365 @@ function bubbleSystem(count, origin, topY, spread, size) {
 }
 
 // じゃり（つぶを たくさん ならべる）
-function pebbles(count, place, colors, size, r, shiny = false) {
-  const mat = shiny
-    ? new THREE.MeshPhysicalMaterial({ roughness: 0.1, clearcoat: 1, envMapIntensity: 1.2 })
-    : std(0xffffff, { roughness: 0.85 });
-  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 7, 5), mat, count);
-  const m = new THREE.Matrix4();
-  const c = new THREE.Color();
-  for (let i = 0; i < count; i++) {
-    const p = place(r);
-    const s = size * (0.55 + r() * 0.7);
-    m.compose(p, new THREE.Quaternion().setFromEuler(new THREE.Euler(r() * 3, r() * 3, r() * 3)), V(s * (0.9 + r() * 0.4), s * (0.6 + r() * 0.3), s));
-    mesh.setMatrixAt(i, m);
-    mesh.setColorAt(i, c.set(colors[Math.floor(r() * colors.length)]).multiplyScalar(0.8 + r() * 0.35));
+// ---------- そこの すな・じゃり ----------
+
+// たかさの がぞう から でこぼこ（ほうせん マップ）を つくる
+function heightToNormal(hx, W, strength) {
+  const src = hx.getImageData(0, 0, W, W).data;
+  const hAt = (x, y) => src[(((y + W) % W) * W + ((x + W) % W)) * 4] / 255;
+  const c = document.createElement('canvas');
+  c.width = c.height = W;
+  const cx = c.getContext('2d');
+  const img = cx.createImageData(W, W);
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const dx = (hAt(x + 1, y) - hAt(x - 1, y)) * strength;
+      const dy = (hAt(x, y + 1) - hAt(x, y - 1)) * strength;
+      const l = Math.hypot(dx, dy, 1);
+      const i = (y * W + x) * 4;
+      img.data[i] = (-dx / l * 0.5 + 0.5) * 255;
+      img.data[i + 1] = (dy / l * 0.5 + 0.5) * 255;
+      img.data[i + 2] = (1 / l * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
   }
-  return mesh;
+  cx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// つぶの いろ（sand：たずな、soil：あかだまつち、white：しろい すな）
+const SUBSTRATES = {
+  sand: { base: '#c4a878', grains: ['#dcc49a', '#cfb487', '#b99a6c', '#e8d6b4', '#a88a60', '#8a7258', '#f0e6d2', '#c8a070'], n: 9000, r: [0.7, 1.7] },
+  soil: { base: '#3e2518', grains: ['#8a5030', '#6e3e24', '#a0603a', '#4a2a18', '#b47048'], n: 5200, r: [1.2, 2.8] },
+  white: { base: '#ddd8cc', grains: ['#ffffff', '#e4ded2', '#c8c0b0', '#f4f0e8', '#b8b0a2'], n: 8000, r: [0.7, 1.6] },
+};
+const SUB_TEX = {};
+function substrateTextures(kind) {
+  if (SUB_TEX[kind]) return SUB_TEX[kind];
+  const P = SUBSTRATES[kind];
+  const W = 256;
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = W;
+    return [c, c.getContext('2d')];
+  };
+  const [cc, cx] = mk();
+  const [, hx] = mk();
+  cx.fillStyle = P.base;
+  cx.fillRect(0, 0, W, W);
+  hx.fillStyle = '#404040';
+  hx.fillRect(0, 0, W, W);
+  const r = rng(kind.length * 97 + 5);
+  const col = new THREE.Color();
+  for (let i = 0; i < P.n; i++) {
+    const x = r() * W;
+    const y = r() * W;
+    const rad = lerp(P.r[0], P.r[1], r());
+    col.set(P.grains[Math.floor(r() * P.grains.length)]);
+    const k = 0.82 + r() * 0.3;
+    const fill = `#${col.getHexString()}`;
+    const hv = 150 + r() * 100;
+    // はしを またぐ つぶは はんたいがわにも かく（くりかえしても つなぎめが みえない）
+    for (const ox of [-W, 0, W]) {
+      for (const oy of [-W, 0, W]) {
+        const px = x + ox;
+        const py = y + oy;
+        if (px < -rad || px > W + rad || py < -rad || py > W + rad) continue;
+        cx.globalAlpha = 1;
+        cx.fillStyle = fill;
+        cx.beginPath();
+        cx.arc(px, py, rad, 0, Math.PI * 2);
+        cx.fill();
+        cx.globalAlpha = Math.abs(1 - k);
+        cx.fillStyle = k < 1 ? '#000' : '#fff';
+        cx.fill();
+        cx.globalAlpha = 1;
+        hx.fillStyle = `rgb(${hv * 0.7 | 0},${hv * 0.7 | 0},${hv * 0.7 | 0})`;
+        hx.beginPath();
+        hx.arc(px, py, rad, 0, Math.PI * 2);
+        hx.fill();
+        hx.fillStyle = `rgb(${hv | 0},${hv | 0},${hv | 0})`;
+        hx.beginPath();
+        hx.arc(px - rad * 0.2, py - rad * 0.2, rad * 0.55, 0, Math.PI * 2);
+        hx.fill();
+      }
+    }
+  }
+  const map = new THREE.CanvasTexture(cc);
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  map.colorSpace = THREE.SRGBColorSpace;
+  SUB_TEX[kind] = { map, normal: heightToNormal(hx, W, 3) };
+  return SUB_TEX[kind];
+}
+
+function substrateMaterial(kind, rx, ry, tint = 0xffffff) {
+  const t = substrateTextures(kind);
+  const map = t.map.clone();
+  map.needsUpdate = true;
+  map.repeat.set(rx, ry);
+  const normalMap = t.normal.clone();
+  normalMap.needsUpdate = true;
+  normalMap.repeat.set(rx, ry);
+  return new THREE.MeshStandardMaterial({ color: tint, map, normalMap, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.95, envMapIntensity: 0.35 });
+}
+
+// いびつな こいし（3しゅるいの かたちを つかいまわす）
+function stoneGeos(r) {
+  return [0, 1, 2].map(() => {
+    const geo = new THREE.IcosahedronGeometry(1, 1);
+    const p = geo.attributes.position;
+    const s = [r() * 6, r() * 6, r() * 6];
+    const v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      const k = 1 + 0.22 * Math.sin(v.x * 2.6 + s[0]) * Math.sin(v.y * 2.2 + s[1]) * Math.sin(v.z * 2.9 + s[2]) + 0.08 * (Math.sin(v.x * 7 + s[1]) + Math.cos(v.z * 6 + s[2]));
+      v.multiplyScalar(k);
+      p.setXYZ(i, v.x, Math.max(v.y, -0.35), v.z);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  });
+}
+
+// こいしを たくさん ならべる（place(r) → ばしょ、colors → いろ）
+function pebbles(count, place, colors, size, r, { shiny = false, flat = 0.6 } = {}) {
+  const mat = shiny
+    ? new THREE.MeshPhysicalMaterial({ roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.4 })
+    : new THREE.MeshStandardMaterial({ roughness: 0.78, envMapIntensity: 0.5 });
+  const geos = shiny ? [new THREE.SphereGeometry(1, 12, 8)] : stoneGeos(r);
+  const g = new THREE.Group();
+  const per = Math.ceil(count / geos.length);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const c = new THREE.Color();
+  for (const geo of geos) {
+    const mesh = new THREE.InstancedMesh(geo, mat, per);
+    for (let i = 0; i < per; i++) {
+      const p = place(r);
+      const sz = size * (0.5 + r() * 0.8);
+      q.setFromEuler(new THREE.Euler((r() - 0.5) * 0.6, r() * 6, (r() - 0.5) * 0.6));
+      m.compose(p, q, V(sz * (0.9 + r() * 0.5), sz * (flat + r() * 0.25), sz * (0.8 + r() * 0.4)));
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, c.set(colors[Math.floor(r() * colors.length)]).multiplyScalar(0.75 + r() * 0.4));
+    }
+    g.add(mesh);
+  }
+  return g;
+}
+
+// ---------- みず ----------
+
+// みずの なかの いろ：ふかいほど あおく こく（y0 そこ 〜 y1 すいめん）
+const VOL_VS = `varying vec3 vW;
+void main() {
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const VOL_FS = `uniform vec3 uTop;
+uniform vec3 uBottom;
+uniform float uY0;
+uniform float uY1;
+uniform float uAlpha;
+varying vec3 vW;
+void main() {
+  float k = clamp((vW.y - uY0) / (uY1 - uY0), 0.0, 1.0);
+  gl_FragColor = vec4(mix(uBottom, uTop, k), uAlpha * (1.25 - 0.45 * k));
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
+// みなそこの ひかりの もよう：2まいを ずらして かさね、ちいさい ほうを とる（ゆらゆら うごく あみめ）
+const CAUSTIC_FS = `uniform sampler2D map;
+uniform float uTime;
+uniform float uRepeat;
+uniform float uStrength;
+uniform vec3 uColor;
+varying vec2 vUv;
+void main() {
+  vec2 p = vUv * uRepeat;
+  vec2 w = vec2(sin(p.y * 2.1 + uTime * 0.7), cos(p.x * 1.7 + uTime * 0.6)) * 0.035;
+  float a = texture2D(map, p + w + vec2(uTime * 0.021, uTime * 0.013)).r;
+  float b = texture2D(map, p * 1.27 - w + vec2(-uTime * 0.017, uTime * 0.019)).r;
+  float c = pow(min(a, b), 1.3) * 1.8;
+  vec2 e = min(vUv, 1.0 - vUv);
+  float fade = smoothstep(0.0, 0.05, min(e.x, e.y));
+  gl_FragColor = vec4(uColor * c * uStrength * fade, 1.0);
+}`;
+const UV_VS = `varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+// ななめから みるほど はんしゃが つよい（ガラス・すいめん）
+function fresnel(mat, U, key) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uMinA = U.uMinA;
+    sh.uniforms.uMaxA = U.uMaxA;
+    sh.fragmentShader = `uniform float uMinA;\nuniform float uMaxA;\n${sh.fragmentShader}`.replace(
+      '#include <dithering_fragment>',
+      `#include <dithering_fragment>
+      float fr = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 3.0);
+      gl_FragColor.a = clamp(gl_FragColor.a * mix(uMinA, uMaxA, fr), 0.0, 1.0);`,
+    );
+  };
+  mat.customProgramCacheKey = () => `fresnel-${key}`;
+  return mat;
+}
+
+function rayTexture() {
+  if (TEX.ray) return TEX.ray;
+  TEX.ray = canvasTexture(64, 256, (x, w, h) => {
+    const img = x.createImageData(w, h);
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const u = (px + 0.5) / w - 0.5;
+        const v = py / h; // 0 うえ → 1 した
+        const i = (py * w + px) * 4;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+        img.data[i + 3] = Math.exp(-u * u * 18) * Math.pow(1 - v, 1.6) * 255;
+      }
+    }
+    x.putImageData(img, 0, 0);
+  });
+  TEX.ray.wrapS = TEX.ray.wrapT = THREE.ClampToEdgeWrapping;
+  return TEX.ray;
+}
+
+function dotTexture() {
+  if (TEX.dot) return TEX.dot;
+  TEX.dot = canvasTexture(32, 32, (x) => {
+    const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.5, 'rgba(255,255,255,0.5)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 32, 32);
+  });
+  return TEX.dot;
+}
+
+// みずの みため ぜんぶ（よごれ・うごき）
+//   volume：みずの かたち、surface：すいめん、floor：ひかりの もようを うつす かたち
+//   slices：おくに いくほど かすむ ための うすい まく、rays：ひかりの すじ、motes：ただよう つぶ
+function makeWater(g, T, o) {
+  const U = { uTime: { value: 0 } };
+  const cleanC = { top: new THREE.Color(0x9ad8f4), bottom: new THREE.Color(0x2a7fae), surf: new THREE.Color(0xe2f5ff) };
+  const dirtyC = { top: new THREE.Color(0x8c9a58), bottom: new THREE.Color(0x3c4a22), surf: new THREE.Color(0x9aa060) };
+  const baseAlpha = o.alpha ?? 0.12;
+  const volMat = (alpha) => new THREE.ShaderMaterial({
+    uniforms: { uTop: { value: cleanC.top.clone() }, uBottom: { value: cleanC.bottom.clone() }, uY0: { value: o.y0 }, uY1: { value: o.y1 }, uAlpha: { value: alpha } },
+    vertexShader: VOL_VS, fragmentShader: VOL_FS, transparent: true, depthWrite: false,
+  });
+  const volume = new THREE.Mesh(o.volume, volMat(baseAlpha));
+  volume.renderOrder = 3;
+  g.add(volume);
+  const slices = (o.slices || []).map(({ geo, pos }) => {
+    const m = new THREE.Mesh(geo, volMat(0.05));
+    m.position.copy(pos);
+    m.renderOrder = 3;
+    g.add(m);
+    return m;
+  });
+  // すいめん
+  const n = T.waterN.clone();
+  n.needsUpdate = true;
+  n.repeat.set(o.repeat, o.repeat);
+  const surfU = { uMinA: { value: 0.12 }, uMaxA: { value: 0.9 } };
+  const surfaceMat = fresnel(new THREE.MeshStandardMaterial({
+    color: cleanC.surf.clone(), transparent: true, opacity: 1, roughness: 0.03, metalness: 0.15, normalMap: n, normalScale: new THREE.Vector2(0.6, 0.6),
+    envMapIntensity: 1.8, side: THREE.DoubleSide, depthWrite: false,
+  }), surfU, 'surface');
+  const surface = new THREE.Mesh(o.surface, surfaceMat);
+  surface.rotation.x = -Math.PI / 2;
+  surface.position.y = o.y1;
+  surface.renderOrder = 4;
+  g.add(surface);
+  // すいめんと ガラスの さかいめの ひかる せん
+  if (o.meniscus) {
+    const m = new THREE.Mesh(o.meniscus, new THREE.MeshBasicMaterial({ color: 0xeaf8ff, transparent: true, opacity: o.meniscusAlpha ?? 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
+    m.renderOrder = 6;
+    g.add(m);
+  }
+  // みなそこの ひかり
+  const cMat = new THREE.ShaderMaterial({
+    uniforms: { map: { value: T.caustic }, uTime: U.uTime, uRepeat: { value: o.causticRepeat }, uStrength: { value: 0.5 }, uColor: { value: new THREE.Color(0xcdeeff) } },
+    vertexShader: UV_VS, fragmentShader: CAUSTIC_FS, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const caustic = new THREE.Mesh(o.floor, cMat);
+  caustic.renderOrder = 1;
+  g.add(caustic);
+  // ひかりの すじ
+  const rays = (o.rays || []).map((r) => {
+    const mat = new THREE.MeshBasicMaterial({ map: rayTexture(), color: 0xdff4ff, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.h), mat);
+    m.position.set(r.x, o.y1 - r.h / 2, r.z);
+    m.rotation.set(0, r.ry, r.tilt);
+    m.renderOrder = 3;
+    m.userData.ph = r.ph;
+    m.userData.tilt = r.tilt;
+    g.add(m);
+    return m;
+  });
+  // ただよう こまかい つぶ
+  let motes = null;
+  let moteState = null;
+  if (o.motes) {
+    const N = o.motes.count;
+    const pos = new Float32Array(N * 3);
+    moteState = [];
+    for (let i = 0; i < N; i++) {
+      const p = o.motes.place();
+      pos.set([p.x, p.y, p.z], i * 3);
+      moteState.push({ base: p, ph: Math.random() * 6, sp: 0.2 + Math.random() * 0.4 });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    motes = new THREE.Points(geo, new THREE.PointsMaterial({
+      map: dotTexture(), color: 0xf4f0e0, size: o.motes.size, transparent: true, opacity: 0.35, depthWrite: false, sizeAttenuation: true,
+    }));
+    motes.renderOrder = 3;
+    g.add(motes);
+  }
+  const all = [volume, ...slices];
+  return {
+    setDirt(f) {
+      for (const m of all) {
+        m.material.uniforms.uTop.value.copy(cleanC.top).lerp(dirtyC.top, f);
+        m.material.uniforms.uBottom.value.copy(cleanC.bottom).lerp(dirtyC.bottom, f);
+      }
+      volume.material.uniforms.uAlpha.value = baseAlpha + f * 0.45;
+      for (const s of slices) s.material.uniforms.uAlpha.value = 0.05 + f * 0.16;
+      surfaceMat.color.copy(cleanC.surf).lerp(dirtyC.surf, f);
+      surfU.uMinA.value = 0.12 + f * 0.45;
+      cMat.uniforms.uStrength.value = 0.5 * (1 - f) ** 2;
+      for (const r of rays) r.material.opacity = 0.07 * (1 - f);
+      if (motes) {
+        motes.material.opacity = 0.3 + f * 0.5;
+        motes.material.color.set(0xf4f0e0).lerp(new THREE.Color(0x6a6030), f);
+      }
+    },
+    update(t) {
+      U.uTime.value = t;
+      n.offset.set(t * 0.012, t * 0.008);
+      for (const r of rays) r.rotation.z = r.userData.tilt + Math.sin(t * 0.3 + r.userData.ph) * 0.04;
+      if (motes) {
+        const p = motes.geometry.attributes.position;
+        moteState.forEach((m, i) => {
+          p.setXYZ(i, m.base.x + Math.sin(t * m.sp + m.ph) * 0.6, m.base.y + Math.sin(t * m.sp * 0.7 + m.ph * 2) * 0.4, m.base.z + Math.cos(t * m.sp + m.ph) * 0.5);
+        });
+        p.needsUpdate = true;
+      }
+    },
+  };
 }
 
 // ---------- すいそう ----------
-// どれも { group, region, floorY, waterTop, waterMat, surfaceMat, caustics, slotPos(i, n) } を かえす
+// どれも { group, region, floorY, waterTop, water, slotPos(i, n), scale, equipAt, size } を かえす
 // region：さかなが およげる ところ
-
-function waterMaterials(T, repeat) {
-  const waterMat = new THREE.MeshBasicMaterial({ color: 0x7cc8f0, transparent: true, opacity: 0.1, depthWrite: false });
-  const n = T.waterN.clone();
-  n.needsUpdate = true;
-  n.repeat.set(repeat, repeat);
-  const surfaceMat = new THREE.MeshStandardMaterial({
-    color: 0xd6f2ff, transparent: true, opacity: 0.14, roughness: 0.04, metalness: 0.1, normalMap: n,
-    envMapIntensity: 1.6, side: THREE.DoubleSide, depthWrite: false,
-  });
-  return { waterMat, surfaceMat };
-}
-
-function causticLayer(T, geo, repeat, y) {
-  const list = [];
-  for (let i = 0; i < 2; i++) {
-    const tex = T.caustic.clone();
-    tex.needsUpdate = true;
-    tex.repeat.set(repeat * (i ? 1.3 : 1), repeat * (i ? 1.3 : 1));
-    const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0x9fdcff, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.y = y + i * 0.02;
-    mesh.renderOrder = 1;
-    list.push(mesh);
-  }
-  return list;
-}
 
 function buildBoxTank(dims, level, r, slots = 1) {
   const T = textures();
@@ -1036,53 +1348,92 @@ function buildBoxTank(dims, level, r, slots = 1) {
   const back = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: T.back }));
   back.position.set(0, h / 2, -d / 2 - 0.2);
   g.add(back);
-  // じゃり：おくが たかい
-  const gh = 1.8 + level * 0.4;
-  const floorY = (x, z) => gh * (1 - (z / d) * 0.9) + Math.sin(x * 0.4) * 0.15;
-  const gravel = new THREE.BoxGeometry(w - 0.8, 1, d - 0.8, 16, 1, 8);
-  const gp = gravel.attributes.position;
-  for (let i = 0; i < gp.count; i++) {
-    const x = gp.getX(i);
-    const z = gp.getZ(i);
-    gp.setY(i, gp.getY(i) > 0 ? floorY(x, z) : 0.05);
-  }
-  gravel.computeVertexNormals();
-  const grit = T.grit.clone();
-  grit.needsUpdate = true;
-  grit.repeat.set(w / 10, d / 10);
-  g.add(new THREE.Mesh(gravel, std(0xffffff, { map: grit, roughness: 0.95 })));
-  const area = w * d;
-  const size = clamp(Math.sqrt(area / 2600) * 0.9, 0.45, 1.1);
-  g.add(pebbles(Math.min(2600, Math.round(area / (size * size * 2.2))), (rr) => {
-    const x = (rr() - 0.5) * (w - 1.4);
-    const z = (rr() - 0.5) * (d - 1.4);
-    return V(x, floorY(x, z) - size * 0.2, z);
-  }, [0xb09c7c, 0x857560, 0x6a625a, 0xc4b69c, 0x4f4842], size, r));
+  // すな：おくが たかい。すこし なみうつ
+  const gh = clamp(h * 0.09, 2, 5);
+  const floorY = (x, z) => gh * (1 - (z / d) * 0.8) + Math.sin(x * 0.35 + z * 0.2) * 0.12 + Math.sin(x * 1.3) * 0.05;
+  const inW = w - 0.8;
+  const inD = d - 0.8;
+  const topGeo = new THREE.PlaneGeometry(inW, inD, Math.ceil(inW / 1.5), Math.ceil(inD / 1.5));
+  topGeo.rotateX(-Math.PI / 2);
+  const tp = topGeo.attributes.position;
+  for (let i = 0; i < tp.count; i++) tp.setY(i, floorY(tp.getX(i), tp.getZ(i)));
+  topGeo.computeVertexNormals();
+  g.add(new THREE.Mesh(topGeo, substrateMaterial('sand', inW / 10, inD / 10)));
+  // ガラスごしに みえる すなの だんめん（まえ・よこ）
+  const sideMat = substrateMaterial('sand', inW / 10, 0.6, 0xc8c0b4);
+  const wall = (len, at) => {
+    const geo = new THREE.PlaneGeometry(len, 1, Math.ceil(len / 1.5), 1);
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const [x, z] = at(p.getX(i));
+      p.setY(i, p.getY(i) > 0 ? floorY(x, z) : 0.05);
+    }
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, sideMat);
+  };
+  const front = wall(inW, (a) => [a, inD / 2]);
+  front.position.z = inD / 2;
+  const left = wall(inD, (a) => [-inW / 2, a]);
+  left.rotation.y = -Math.PI / 2;
+  left.position.x = -inW / 2;
+  const right = wall(inD, (a) => [inW / 2, -a]);
+  right.rotation.y = Math.PI / 2;
+  right.position.x = inW / 2;
+  g.add(front, left, right);
+  // こいし：すなの うえに ぱらぱら、ガラスぎわにも
+  const area = inW * inD;
+  const size = clamp(Math.sqrt(area / 1800) * 0.55, 0.35, 1.1);
+  const stoneCols = [0x9c8a6e, 0x6e6252, 0xb8a484, 0x4e463c, 0xc8b89a, 0x807462, 0xa88e68];
+  g.add(pebbles(Math.min(1800, Math.round(area / (size * size * 9))), (rr) => {
+    const x = (rr() - 0.5) * (inW - 0.6);
+    const z = (rr() - 0.5) * (inD - 0.6);
+    return V(x, floorY(x, z) - size * 0.25, z);
+  }, stoneCols, size, r));
+  g.add(pebbles(Math.round(inW / size / 2.2), (rr) => {
+    const x = (rr() - 0.5) * (inW - 0.6);
+    const z = inD / 2 - 0.3 - rr() * 0.4;
+    return V(x, rr() * floorY(x, z), z);
+  }, stoneCols, size * 0.8, r));
   // みず
   const wt = h - 2.2;
-  const { waterMat, surfaceMat } = waterMaterials(T, w / 18);
-  const vol = new THREE.Mesh(new THREE.BoxGeometry(w - 0.6, wt - 0.4, d - 0.6), waterMat);
-  vol.position.y = (wt - 0.4) / 2 + 0.2;
-  vol.renderOrder = 3;
-  const surf = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.6, d - 0.6), surfaceMat);
-  surf.rotation.x = -Math.PI / 2;
-  surf.position.y = wt;
-  surf.renderOrder = 4;
-  g.add(vol, surf);
-  const cgeo = new THREE.PlaneGeometry(w - 1, d - 1, 8, 4);
+  const vol = new THREE.BoxGeometry(w - 0.6, wt - 0.2, d - 0.6);
+  vol.translate(0, (wt - 0.2) / 2 + 0.1, 0);
+  const cgeo = new THREE.PlaneGeometry(inW - 0.2, inD - 0.2, Math.ceil(inW / 3), Math.ceil(inD / 3));
   cgeo.rotateX(-Math.PI / 2);
   const cp = cgeo.attributes.position;
-  for (let i = 0; i < cp.count; i++) cp.setY(i, floorY(cp.getX(i), cp.getZ(i)) + 0.35);
-  const caustics = causticLayer(T, cgeo, w / 14, 0);
-  caustics.forEach((m) => g.add(m));
+  for (let i = 0; i < cp.count; i++) cp.setY(i, floorY(cp.getX(i), cp.getZ(i)) + 0.12);
+  const slice = () => {
+    const s = new THREE.PlaneGeometry(w - 0.8, wt - 0.3);
+    s.translate(0, (wt - 0.3) / 2 + 0.15, 0);
+    return s;
+  };
+  const menisc = new THREE.PlaneGeometry(w - 0.6, 0.35);
+  menisc.translate(0, wt - 0.12, d / 2 - 0.32);
+  const rr = rng(5);
+  const nRays = Math.round(3 + w / 20);
+  const water = makeWater(g, T, {
+    volume: vol, surface: new THREE.PlaneGeometry(w - 0.6, d - 0.6), floor: cgeo, y0: 0, y1: wt,
+    repeat: w / 18, causticRepeat: w / 16, alpha: 0.1,
+    slices: [0.3, 0.62].map((k) => ({ geo: slice(), pos: V(0, 0, d / 2 - 0.4 - d * k) })),
+    meniscus: menisc,
+    rays: Array.from({ length: nRays }, (_, i) => ({
+      w: 4 + rr() * 6, h: wt * (0.7 + rr() * 0.3), x: -w / 2 + (i + 0.5 + (rr() - 0.5) * 0.6) * (w / nRays), z: (rr() - 0.5) * d * 0.5,
+      ry: (rr() - 0.5) * 0.8, tilt: 0.12 + (rr() - 0.5) * 0.1, ph: rr() * 6,
+    })),
+    motes: {
+      count: Math.round(clamp((w * d * h) / 250, 60, 260)), size: 0.18 + w / 900,
+      place: () => V((Math.random() - 0.5) * (w - 2), gh * 1.8 + Math.random() * (wt - gh * 1.8 - 0.5), (Math.random() - 0.5) * (d - 2)),
+    },
+  });
   // ガラスと わく
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshPhysicalMaterial({
-    color: 0xeaf6ff, transparent: true, opacity: 0.12, roughness: 0.03, envMapIntensity: 1.6, depthWrite: false, side: THREE.DoubleSide,
-  }));
+  const glassU = { uMinA: { value: 0.35 }, uMaxA: { value: 1.6 } };
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fresnel(new THREE.MeshPhysicalMaterial({
+    color: 0xeaf6ff, transparent: true, opacity: 0.2, roughness: 0.02, envMapIntensity: 1.8, depthWrite: false, side: THREE.DoubleSide,
+  }), glassU, 'glass'));
   glass.position.y = h / 2;
   glass.renderOrder = 5;
   g.add(glass);
-  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), new THREE.LineBasicMaterial({ color: 0x9cc6d8 }));
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), new THREE.LineBasicMaterial({ color: 0x8fc8bc }));
   edges.position.y = h / 2;
   g.add(edges);
   const frame = std(0x1b1e21, { roughness: 0.4 });
@@ -1105,9 +1456,9 @@ function buildBoxTank(dims, level, r, slots = 1) {
     leg.position.set(x, h + 0.6, -d * 0.1);
     g.add(leg);
   }
-  const region = { kind: 'box', xMin: -w / 2 + 0.8, xMax: w / 2 - 0.8, zMin: -d / 2 + 0.8, zMax: d / 2 - 0.8, yMin: gh * 1.9 + 0.3, yMax: wt };
+  const region = { kind: 'box', xMin: -w / 2 + 0.8, xMax: w / 2 - 0.8, zMin: -d / 2 + 0.8, zMax: d / 2 - 0.8, yMin: gh * 1.8 + 0.3, yMax: wt };
   return {
-    group: g, region, floorY, waterTop: wt, waterMat, surfaceMat, caustics, dims,
+    group: g, region, floorY, waterTop: wt, water, dims,
     slotPos: (i, n) => V(-w / 2 + (i + 0.5) * (w / n), 0, -d / 2 + Math.min(d * 0.3, 7)),
     scale: clamp(Math.min(h / 24, w / slots / 12), 0.6, 2.2),
     equipAt: { pump: V(-w / 2 + 2.5, 0, -d / 2 + 2.5), filter: V(w / 2 - 6, 0, -d / 2), heater: V(-w * 0.15, 0, -d / 2 + 1.4) },
@@ -1130,42 +1481,52 @@ function buildBasin(dims, r) {
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.02;
   g.add(floor);
-  // せんめんき（プラスチック）
+  // せんめんき（プラスチック。ふちは まるく まいている）
   const pts = [
     [0, 0], [rb + 0.35, 0], [R + 0.35, h], [R + 1.2, h + 0.15], [R + 1.45, h + 0.7], [R + 0.8, h + 1.0], [R, h + 0.55],
     [rAt(h * 0.5), h * 0.5], [rb, 0.55], [0, 0.55],
   ].map(([x, y]) => new THREE.Vector2(x, y));
-  const basin = new THREE.Mesh(new THREE.LatheGeometry(pts, 64), new THREE.MeshPhysicalMaterial({ color: 0x74b9e2, roughness: 0.42, clearcoat: 0.35, envMapIntensity: 0.8, side: THREE.DoubleSide }));
+  const basin = new THREE.Mesh(new THREE.LatheGeometry(pts, 72), new THREE.MeshPhysicalMaterial({
+    color: 0x74b9e2, roughness: 0.38, clearcoat: 0.5, clearcoatRoughness: 0.25, envMapIntensity: 0.9, side: THREE.DoubleSide,
+  }));
   g.add(basin);
-  // あかだまつち
+  // あかだまつち：こまかい つちの うえに つぶ
   const gy = 1.4;
-  const base = new THREE.Mesh(new THREE.CircleGeometry(rAt(gy), 40), std(0x3a2418, { roughness: 1 }));
-  base.rotation.x = -Math.PI / 2;
+  const baseGeo = new THREE.CircleGeometry(rAt(gy), 48);
+  baseGeo.rotateX(-Math.PI / 2);
+  const base = new THREE.Mesh(baseGeo, substrateMaterial('soil', 3, 3));
   base.position.y = gy - 0.35;
   g.add(base);
-  g.add(pebbles(1100, (rr) => {
+  g.add(pebbles(900, (rr) => {
     const a = rr() * Math.PI * 2;
     const d = Math.sqrt(rr()) * (rAt(gy) - 0.4);
-    return V(Math.cos(a) * d, gy - 0.4 + rr() * 0.2, Math.sin(a) * d);
-  }, [0x5a3420, 0x4a2a1a, 0x6a3e24, 0x3a2216], 0.36, r));
+    return V(Math.cos(a) * d, gy - 0.42 + rr() * 0.18, Math.sin(a) * d);
+  }, [0x8a4a28, 0x74391e, 0x9c5a32, 0x5e2e18, 0xa86a40], 0.42, r, { flat: 0.75 }));
   const floorY = () => gy;
   const wt = h * 0.8;
-  const { waterMat, surfaceMat } = waterMaterials(T, 1.5);
-  const vol = new THREE.Mesh(new THREE.CylinderGeometry(rAt(wt) - 0.1, rAt(0.6) - 0.1, wt - 0.75, 48), waterMat);
-  vol.position.y = (wt - 0.75) / 2 + 0.6;
-  vol.renderOrder = 3;
-  const surf = new THREE.Mesh(new THREE.CircleGeometry(rAt(wt) - 0.05, 48), surfaceMat);
-  surf.rotation.x = -Math.PI / 2;
-  surf.position.y = wt;
-  surf.renderOrder = 4;
-  g.add(vol, surf);
-  const cgeo = new THREE.CircleGeometry(rAt(gy) - 0.3, 32);
+  const volGeo = new THREE.CylinderGeometry(rAt(wt) - 0.1, rAt(0.6) - 0.1, wt - 0.75, 48);
+  volGeo.translate(0, (wt - 0.75) / 2 + 0.6, 0);
+  const cgeo = new THREE.CircleGeometry(rAt(gy) - 0.3, 40);
   cgeo.rotateX(-Math.PI / 2);
-  const caustics = causticLayer(T, cgeo, 1.8, gy + 0.3);
-  caustics.forEach((m) => g.add(m));
+  cgeo.translate(0, gy + 0.05, 0);
+  const menisc = new THREE.RingGeometry(rAt(wt) - 0.2, rAt(wt) - 0.02, 72);
+  menisc.rotateX(-Math.PI / 2);
+  menisc.translate(0, wt + 0.01, 0);
+  const water = makeWater(g, T, {
+    volume: volGeo, surface: new THREE.CircleGeometry(rAt(wt) - 0.05, 64), floor: cgeo, y0: gy, y1: wt,
+    repeat: 1.5, causticRepeat: 2.2, alpha: 0.08, meniscus: menisc, meniscusAlpha: 0.22,
+    motes: {
+      count: 50, size: 0.15,
+      place: () => {
+        const a = Math.random() * 6.3;
+        const d = Math.random() * (rAt(gy) - 1);
+        return V(Math.cos(a) * d, gy + 0.5 + Math.random() * (wt - gy - 1), Math.sin(a) * d);
+      },
+    },
+  });
   const region = { kind: 'round', rAt: (y) => rAt(y) - 0.6, yMin: gy + 0.4, yMax: wt };
   return {
-    group: g, region, floorY, waterTop: wt, waterMat, surfaceMat, caustics, dims,
+    group: g, region, floorY, waterTop: wt, water, dims,
     slotPos: () => V(-R * 0.35, gy - 0.3, -R * 0.3),
     scale: 0.7, equipAt: {}, size: [D, D, h],
   };
@@ -1194,50 +1555,64 @@ function buildBowl(dims, r) {
   g.add(doily);
   // きんぎょばち（ガラス。ふちが ひらく）
   const pts = [];
-  for (let i = 0; i <= 30; i++) {
-    const y = (i / 30) * H;
+  for (let i = 0; i <= 36; i++) {
+    const y = (i / 36) * H;
     pts.push(new THREE.Vector2(Math.max(0.01, rAt(y)), y));
   }
   const rt = rAt(H);
   pts.push(new THREE.Vector2(rt * 1.08, H + 0.8), new THREE.Vector2(rt * 1.2, H + 1.4));
-  const glass = new THREE.Mesh(new THREE.LatheGeometry(pts, 64), new THREE.MeshPhysicalMaterial({
-    color: 0xeef8ff, transparent: true, opacity: 0.16, roughness: 0.02, envMapIntensity: 1.8, depthWrite: false, side: THREE.DoubleSide,
-  }));
+  const glassU = { uMinA: { value: 0.25 }, uMaxA: { value: 1.8 } };
+  const glass = new THREE.Mesh(new THREE.LatheGeometry(pts, 72), fresnel(new THREE.MeshPhysicalMaterial({
+    color: 0xeef8ff, transparent: true, opacity: 0.3, roughness: 0.02, envMapIntensity: 2, depthWrite: false, side: THREE.DoubleSide,
+  }), glassU, 'glass'));
   glass.renderOrder = 5;
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(rt * 1.2, 0.18, 8, 64), new THREE.MeshPhysicalMaterial({ color: 0xcfe8f5, transparent: true, opacity: 0.5, roughness: 0.05 }));
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(rt * 1.2, 0.18, 8, 72), new THREE.MeshPhysicalMaterial({ color: 0xcfe8f5, transparent: true, opacity: 0.55, roughness: 0.05, envMapIntensity: 1.5 }));
   rim.rotation.x = Math.PI / 2;
   rim.position.y = H + 1.4;
   g.add(glass, rim);
-  // いろの ついた ガラスの じゃり
-  const gy = 2.6;
-  g.add(pebbles(260, (rr) => {
-    const y = rr() * gy;
+  // しろい すなの うえに いろの ついた ガラスの じゃり
+  const gy = 2.4;
+  const sandPts = [new THREE.Vector2(0, 0.15)];
+  for (let i = 0; i <= 10; i++) {
+    const y = 0.15 + (i / 10) * (gy - 0.6);
+    sandPts.push(new THREE.Vector2(Math.max(0.01, rAt(y) - 0.15), y));
+  }
+  sandPts.push(new THREE.Vector2(0.01, gy - 0.45));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(sandPts, 48), substrateMaterial('white', 3, 1.2)));
+  g.add(pebbles(170, (rr) => {
     const a = rr() * Math.PI * 2;
-    const d = Math.sqrt(rr()) * Math.max(0.5, rAt(y) - 0.8);
-    return V(Math.cos(a) * d, y, Math.sin(a) * d);
-  }, [0x3a86c8, 0x58b36a, 0xf2f2f2, 0x7fd0e8, 0xe8c04a], 0.75, r, true));
+    const d = Math.sqrt(rr()) * Math.max(0.5, rAt(gy) - 1);
+    return V(Math.cos(a) * d, gy - 0.55 + rr() * 0.3, Math.sin(a) * d);
+  }, [0x3a86c8, 0x58b36a, 0xf2f2f2, 0x7fd0e8, 0xe8c04a], 0.7, r, { shiny: true, flat: 0.55 }));
   const floorY = () => gy;
   const wt = cy + R * 0.5;
-  const { waterMat, surfaceMat } = waterMaterials(T, 1.2);
   const wpts = [];
   for (let i = 0; i <= 24; i++) {
     const y = 0.3 + (i / 24) * (wt - 0.35);
     wpts.push(new THREE.Vector2(Math.max(0.01, rAt(y) - 0.12), y));
   }
-  const vol = new THREE.Mesh(new THREE.LatheGeometry(wpts, 48), waterMat);
-  vol.renderOrder = 3;
-  const surf = new THREE.Mesh(new THREE.CircleGeometry(rAt(wt) - 0.12, 48), surfaceMat);
-  surf.rotation.x = -Math.PI / 2;
-  surf.position.y = wt;
-  surf.renderOrder = 4;
-  g.add(vol, surf);
-  const cgeo = new THREE.CircleGeometry(rAt(gy) - 0.4, 32);
+  const cgeo = new THREE.CircleGeometry(rAt(gy) - 0.6, 32);
   cgeo.rotateX(-Math.PI / 2);
-  const caustics = causticLayer(T, cgeo, 1.4, gy + 0.2);
-  caustics.forEach((m) => g.add(m));
+  cgeo.translate(0, gy - 0.2, 0);
+  const menisc = new THREE.RingGeometry(rAt(wt) - 0.4, rAt(wt) - 0.1, 72);
+  menisc.rotateX(-Math.PI / 2);
+  menisc.translate(0, wt + 0.01, 0);
+  const water = makeWater(g, T, {
+    volume: new THREE.LatheGeometry(wpts, 48), surface: new THREE.CircleGeometry(rAt(wt) - 0.12, 64), floor: cgeo, y0: gy, y1: wt,
+    repeat: 1.2, causticRepeat: 1.6, alpha: 0.1, meniscus: menisc, meniscusAlpha: 0.3,
+    motes: {
+      count: 60, size: 0.15,
+      place: () => {
+        const y = gy + 1 + Math.random() * (wt - gy - 2);
+        const a = Math.random() * 6.3;
+        const d = Math.random() * Math.max(0.5, rAt(y) - 1.5);
+        return V(Math.cos(a) * d, y, Math.sin(a) * d);
+      },
+    },
+  });
   const region = { kind: 'sphere', cy, R: R - 0.9, yMin: gy + 0.6, yMax: wt };
   return {
-    group: g, region, floorY, waterTop: wt, waterMat, surfaceMat, caustics, dims,
+    group: g, region, floorY, waterTop: wt, water, dims,
     slotPos: () => V(R * 0.25, gy - 0.2, -R * 0.3),
     scale: 0.8, equipAt: {}, size: [D, D, H],
   };
@@ -1593,17 +1968,10 @@ export function createAquarium(container, { onSelect }) {
   }
 
   // みずの よごれ：0（まっくろ）〜 100（きれい）
-  const clean = { tint: new THREE.Color(0x7cc8f0), surf: new THREE.Color(0xd6f2ff) };
-  const dirty = { tint: new THREE.Color(0x66743a), surf: new THREE.Color(0x98a060) };
   function applyWater(now) {
     if (now) water.shown = water.q;
     if (!tank) return;
-    const f = Math.pow(1 - water.shown / 100, 1.2);
-    tank.waterMat.color.copy(clean.tint).lerp(dirty.tint, f);
-    tank.waterMat.opacity = 0.1 + f * 0.42;
-    tank.surfaceMat.color.copy(clean.surf).lerp(dirty.surf, f);
-    tank.surfaceMat.opacity = 0.14 + f * 0.45;
-    for (const c of tank.caustics) c.material.opacity = 0.14 * (1 - f);
+    tank.water.setDirt(Math.pow(1 - water.shown / 100, 1.2));
   }
   function setWater(q, now) {
     water.q = q;
@@ -1897,10 +2265,7 @@ export function createAquarium(container, { onSelect }) {
       water.shown += (water.q - water.shown) * Math.min(1, dt * 1.5);
       applyWater(false);
     }
-    const n = tank.surfaceMat.normalMap;
-    n.offset.set(t * 0.012, t * 0.008);
-    tank.caustics[0].material.map.offset.set(t * 0.02, t * 0.013);
-    tank.caustics[1].material.map.offset.set(-t * 0.015, t * 0.018);
+    tank.water.update(t);
     const s = selected && actors.get(selected);
     if (s) {
       const sz = Math.max(1.4, s.len * 0.35);
@@ -1954,6 +2319,13 @@ export function createAquarium(container, { onSelect }) {
     renderer.render(scene, camera);
     return renderer.domElement.toDataURL('image/jpeg', 0.85);
   };
+  // たしかめ よう：カメラを すきな ところに
+  const setView = (pos, target) => {
+    camera.position.set(...pos);
+    controls.target.set(...target);
+    controls.minDistance = 0.5;
+    controls.update();
+  };
 
-  return { setTank, setFish, setWater, feed, select, dispose, advance, debug, lookAt, snapshot, fitCamera };
+  return { setTank, setFish, setWater, feed, select, dispose, advance, debug, lookAt, snapshot, fitCamera, setView };
 }

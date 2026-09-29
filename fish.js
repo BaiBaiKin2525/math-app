@@ -16,21 +16,29 @@
 
 const fishKey = (id) => `mathapp.v1.fish.${id}`;
 
-// level：すいそうの おおきさ、cap：はいる かず（メダカ 1、きんぎょ 2 … で かぞえる）、dose：みずかえに つかう カルキぬき
+// level：すいそうの だんかい（2 から エアポンプ・ろかフィルター、4 から ヒーター）、liters：みずの りょう
+// cap：その さかな だけ なら なんびき かえるか（めやす）。のっていない さかなは かえない。
+//   ちがう さかなを いっしょに かう ときは「1ぴき ＝ 1/めやす」を たして 1 まで
+//   めやすは しいくの せつめい サイトより（メダカ：みず 2L に 1〜2ひき、30cm 10〜12ひき・60cm 30ひき、
+//   30cm すいそうに ちいさい さかな 6ぴき、60cm 50ぴき、90cm 100ぴき いじょう・エンゼル 7〜10ぴき、
+//   きんぎょ：30cm 1〜2ひき・90cm 7〜8ひき、アロワナ：180cm いじょうで 1ぴき）
+// dose：みずかえに つかう カルキぬき
 const TANKS = {
-  senmenki: { name: 'せんめんき', icon: '🪣', price: 0, level: 0, cap: 3, slots: 1, shape: 'basin', dims: [32, 32, 11], dose: 1,
-    desc: 'メダカ だけ。3びき まで' },
-  bachi: { name: 'きんぎょばち', icon: '🫙', price: 250, level: 1, cap: 2, slots: 1, shape: 'bowl', dims: [28, 28, 24], dose: 1, plants: true,
-    desc: 'みずくさ いり。きんぎょ 1ぴき か メダカ 2ひき' },
-  S: { name: 'しょうがた すいそう', icon: '🐠', price: 500, level: 2, cap: 6, slots: 2, shape: 'box', dims: [30, 18, 24], dose: 1,
-    desc: 'きんぎょ 3びき か メダカ 6ぴき。エアポンプと ろかフィルターが ひつよう' },
-  M: { name: 'ちゅうがた すいそう', icon: '🐠', price: 900, level: 3, cap: 12, slots: 3, shape: 'box', dims: [45, 24, 30], dose: 2, mix: true,
-    desc: 'ちがう さかなと いっしょに かえる。ベタ・グッピーも' },
-  L: { name: 'おおがた すいそう', icon: '🐠', price: 1500, level: 4, cap: 20, slots: 4, shape: 'box', dims: [60, 30, 36], dose: 3, mix: true,
-    desc: 'ヒーターを つけると ねったいぎょも かえる' },
-  XL: { name: 'とくだい すいそう', icon: '🐠', price: 3000, level: 5, cap: 40, slots: 5, shape: 'box', dims: [120, 45, 45], dose: 4, mix: true,
-    desc: 'アロワナが かえる' },
+  senmenki: { name: 'せんめんき', icon: '🪣', price: 0, level: 0, liters: 6, slots: 1, shape: 'basin', dims: [32, 32, 11], dose: 1,
+    cap: { medaka: 4, himedaka: 4 }, desc: 'メダカ だけ' },
+  bachi: { name: 'きんぎょばち', icon: '🫙', price: 250, level: 1, liters: 7, slots: 1, shape: 'bowl', dims: [28, 28, 24], dose: 1, plants: true,
+    cap: { medaka: 5, himedaka: 5, kingyo: 1 }, desc: 'みずくさ いり' },
+  S: { name: '30cm すいそう', icon: '🐠', price: 500, level: 2, liters: 12, slots: 2, shape: 'box', dims: [30, 18, 24], dose: 1,
+    cap: { medaka: 10, himedaka: 10, kingyo: 2, ryukin: 2 }, desc: 'エアポンプと ろかフィルターが ひつよう' },
+  M: { name: '60cm すいそう', icon: '🐠', price: 1200, level: 3, liters: 61, slots: 3, shape: 'box', dims: [60, 30, 36], dose: 2, mix: true,
+    cap: { medaka: 30, himedaka: 30, kingyo: 6, ryukin: 6, betta: 1, guppy: 50 }, desc: 'ちがう さかなと いっしょに かえる' },
+  L: { name: '90cm すいそう', icon: '🐠', price: 2000, level: 4, liters: 166, slots: 4, shape: 'box', dims: [90, 45, 45], dose: 4, mix: true,
+    cap: { medaka: 80, himedaka: 80, kingyo: 8, ryukin: 8, betta: 1, guppy: 100, neon: 100, angel: 8 }, desc: 'ヒーターを つけると ねったいぎょも かえる' },
+  XL: { name: '180cm すいそう', icon: '🐠', price: 4000, level: 5, liters: 609, slots: 6, shape: 'box', dims: [180, 60, 60], dose: 8, mix: true,
+    cap: { medaka: 300, himedaka: 300, kingyo: 30, ryukin: 30, betta: 1, guppy: 300, neon: 300, angel: 30, arowana: 1 }, desc: 'アロワナが かえる' },
 };
+// タブレットで なめらかに うごく ように、1つの すいそうに いれられるのは ここまで
+const APP_MAX_FISH = 50;
 const PUMP_FROM = 2; // しょうがた すいそう から エアポンプ・ろかフィルターが ひつよう
 
 const EQUIPS = {
@@ -42,59 +50,59 @@ const EQUIPS = {
 const FISH_STARVE = 5;
 const DIRTY_DAYS = 3;
 
-// units：すいそうの ばしょを いくつ つかうか、level：ひつような すいそう、size：かった とき → おとな（mm）
+// level：ひつような すいそう、size：かった とき → おとな（mm）、alone：ほかの さかなと いっしょに かえない
 // grow：おとなに なるまでの べんきょうした ひ、life：じゅみょう（にち）、kind：おなじ なかま（いっしょに かえる）
 const FISH = {
   medaka: {
-    name: 'メダカ', icon: '🐟', price: 30, level: 0, units: 1, size: [18, 35], grow: 10, life: 730, kind: 'medaka',
+    name: 'メダカ', icon: '🐟', price: 30, level: 0, size: [18, 35], grow: 10, life: 730, kind: 'medaka',
     lives: 'たんぼや おがわ', eats: 'ちいさな むし、ミジンコ',
     text: 'にほんの たんぼや おがわに すむ ちいさな さかな。むれで すいめんの ちかくを およぎます。',
     trivia: 'めが おおきく、あたまの うえの ほうに あるので「めだか」と よばれるように なったと いわれています。',
   },
   himedaka: {
-    name: 'ヒメダカ', icon: '🐟', price: 40, level: 0, units: 1, size: [18, 35], grow: 10, life: 730, kind: 'medaka',
+    name: 'ヒメダカ', icon: '🐟', price: 40, level: 0, size: [18, 35], grow: 10, life: 730, kind: 'medaka',
     lives: 'ひとが そだてた メダカ', eats: 'ちいさな むし、ミジンコ',
     text: 'からだが オレンジいろの メダカ。ひとが そだてて ふやしました。ふつうの メダカと いっしょに かえます。',
     trivia: 'メダカは たまごを うみます。10にち くらいで あかちゃんが うまれます。',
   },
   kingyo: {
-    name: 'きんぎょ', icon: '🐠', price: 80, level: 1, units: 2, size: [40, 150], grow: 30, life: 3650, kind: 'kingyo',
+    name: 'きんぎょ', icon: '🐠', price: 80, level: 1, size: [40, 150], grow: 30, life: 3650, kind: 'kingyo',
     lives: 'ひとが そだてた さかな（もとは フナ）', eats: 'なんでも たべる',
     text: 'フナを もとに、むかしの ちゅうごくで うまれた さかな。あかや しろの もようが 1ぴきずつ ちがいます。',
     trivia: 'じょうずに そだてると 10ねん いじょう いきる ことも あります。',
   },
   ryukin: {
-    name: 'リュウキン', icon: '🐠', price: 200, level: 2, units: 2, size: [40, 120], grow: 30, life: 3650, kind: 'kingyo',
+    name: 'リュウキン', icon: '🐠', price: 200, level: 2, size: [40, 120], grow: 30, life: 3650, kind: 'kingyo',
     lives: 'ひとが そだてた きんぎょ', eats: 'なんでも たべる',
     text: 'まるい からだと、ひらひらの ながい おびれが うつくしい きんぎょの なかま。',
     trivia: 'およぐのが ゆっくり。はやい さかなと いっしょだと えさを とられて しまう ことも あります。',
   },
   betta: {
-    name: 'ベタ', icon: '🐠', price: 250, level: 3, units: 2, single: true, size: [40, 65], grow: 15, life: 730, kind: 'betta',
+    name: 'ベタ', icon: '🐠', price: 250, level: 3, single: true, size: [40, 65], grow: 15, life: 730, kind: 'betta',
     lives: 'タイなどの たんぼや ぬま', eats: 'ちいさな むし',
     text: 'ドレスの ような おおきな ひれの さかな。オスどうしは けんかを するので、1つの すいそうに 1ぴき です。',
     trivia: 'くちから くうきを すうことが できるので、さんその すくない みずでも いきられます。',
   },
   guppy: {
-    name: 'グッピー', icon: '🐠', price: 60, level: 3, units: 1, size: [15, 35], grow: 10, life: 365, kind: 'guppy',
+    name: 'グッピー', icon: '🐠', price: 60, level: 3, size: [15, 35], grow: 10, life: 365, kind: 'guppy',
     lives: 'みなみアメリカの かわ', eats: 'ちいさな むし、も',
     text: 'オスの おびれが カラフルで きれいな ちいさな さかな。なかまと むれで およぎます。',
     trivia: 'たまごでは なく、あかちゃんを うむ さかなです。',
   },
   neon: {
-    name: 'ネオンテトラ', icon: '🐠', price: 50, level: 4, units: 1, tropical: true, size: [15, 35], grow: 10, life: 1095, kind: 'neon',
+    name: 'ネオンテトラ', icon: '🐠', price: 50, level: 4, tropical: true, size: [15, 35], grow: 10, life: 1095, kind: 'neon',
     lives: 'みなみアメリカの アマゾンがわ', eats: 'ちいさな むし',
     text: 'あおく ひかる せんと、あかい からだが きれいな ねったいぎょ。おおぜいの むれで およぎます。',
     trivia: 'あおい せんは ひかりを はねかえして ひかって みえます。むれで いると ねらわれにくく なります。',
   },
   angel: {
-    name: 'エンゼルフィッシュ', icon: '🐠', price: 300, level: 4, units: 3, tropical: true, size: [40, 120], grow: 30, life: 3650, kind: 'angel',
+    name: 'エンゼルフィッシュ', icon: '🐠', price: 300, level: 4, tropical: true, size: [40, 120], grow: 30, life: 3650, kind: 'angel',
     lives: 'みなみアメリカの アマゾンがわ', eats: 'ちいさな むし、ちいさな さかな',
     text: 'たかく のびた ひれが てんしの はねの ような ねったいぎょ。たての しまもようが あります。',
     trivia: 'ひらたい からだで、みずくさの あいだを すいすい およぎます。',
   },
   arowana: {
-    name: 'アロワナ', icon: '🐉', price: 2500, level: 5, units: 12, single: true, tropical: true, food: 'big', size: [150, 900], grow: 90, life: 5475, kind: 'arowana',
+    name: 'アロワナ', icon: '🐉', price: 2500, level: 5, alone: true, tropical: true, food: 'big', size: [150, 900], grow: 90, life: 5475, kind: 'arowana',
     lives: 'みなみアメリカの アマゾンがわ', eats: 'むし、さかな、エビ',
     text: 'ぎんいろの おおきな うろこと、うえを むいた くちの おおきな さかな。とても ふるい じだいから いる なかまです。',
     trivia: 'すいめんから ジャンプして、きの えだに いる むしを たべる ことが あります。',
@@ -167,14 +175,15 @@ function noteFish(data, f, day) {
 }
 
 const fishIn = (tankId, data = aq.data) => data.fish.filter((f) => f.tankId === tankId);
-const unitsIn = (tankId, data = aq.data) => fishIn(tankId, data).reduce((n, f) => n + FISH[f.species].units, 0);
+// すいそうの こみぐあい（1 で いっぱい）
+const crowdOf = (t, list) => list.reduce((n, f) => n + 1 / (TANKS[t.type].cap[f.species] || 1), 0);
+const crowdIn = (t, data = aq.data) => crowdOf(t, fishIn(t.id, data));
 
 // 1にちで どれだけ みずが よごれるか
 function waterDecay(tank, list) {
   if (!list.length) return 0;
   const T = TANKS[tank.type];
-  const load = list.reduce((n, f) => n + FISH[f.species].units, 0) / T.cap;
-  let d = 6 + 22 * load;
+  let d = 6 + 22 * crowdOf(tank, list);
   if (tank.equip.filter) d *= 0.35;
   const plants = (T.plants ? 1 : 0) + tank.decor.filter((x) => x.type === 'kusa').length;
   d *= Math.max(0.7, 1 - 0.1 * plants);
@@ -273,13 +282,17 @@ const fishSizeText = (mm) => (mm >= 100 ? `${Math.round(mm / 10)}cm` : `${mm}mm`
 function fitProblem(t, key) {
   const sp = FISH[key];
   const T = TANKS[t.type];
-  if (T.level < sp.level) return `${Object.values(TANKS).find((x) => x.level === sp.level).name}より おおきい すいそうが ひつよう`;
+  if (!T.cap[key]) return `${Object.values(TANKS).find((x) => x.cap[key]).name} いじょうが ひつよう`;
   if (T.level >= PUMP_FROM && !(t.equip.pump && t.equip.filter)) return 'エアポンプと ろかフィルターを つけてね';
   if (sp.tropical && !t.equip.heater) return 'ヒーターを つけた すいそうが ひつよう';
   const list = fishIn(t.id);
   if (!T.mix && list.some((f) => FISH[f.species].kind !== sp.kind)) return 'この すいそうでは ちがう なかまと いっしょに かえない';
+  if (sp.alone && list.length) return `${sp.name}は ほかの さかなを たべて しまうので、からっぽの すいそうで 1ぴきで かう`;
+  const alone = list.find((f) => FISH[f.species].alone);
+  if (alone) return `${FISH[alone.species].name}が いる すいそうには いれられない（たべられて しまう）`;
   if (sp.single && list.some((f) => f.species === key)) return '1つの すいそうに 1ぴき だけ';
-  if (unitsIn(t.id) + sp.units > T.cap) return 'すいそうが いっぱい';
+  if (crowdIn(t) + 1 / T.cap[key] > 1.0001) return 'すいそうが いっぱい';
+  if (list.length >= APP_MAX_FISH) return `この アプリでは 1つの すいそうに ${APP_MAX_FISH}ひき まで`;
   return null;
 }
 
@@ -289,7 +302,8 @@ function fishView(f) {
   const T = TANKS[t.type];
   // ちいさい さかなも みえる ように すこし おおきめ。すいそうから はみださない
   const cm = f.size / 10;
-  const lengthCm = Math.max(3.2, T.dims[0] * 0.12, Math.min(T.dims[0] * 0.42, cm * clampNum(1.6 - (cm - 3) * 0.08, 1, 1.6)));
+  const small = T.shape === 'box' ? 0 : T.dims[0] * 0.12; // せんめんき・きんぎょばちでは みやすく
+  const lengthCm = Math.max(3.2, small, Math.min(T.dims[0] * 0.42, cm * clampNum(1.6 - (cm - 3) * 0.08, 1, 1.6)));
   return { id: f.id, species: f.species, lengthCm, seed: f.seed, weak: fishMood(f).weak };
 }
 
@@ -412,18 +426,20 @@ function renderFishInfo() {
       : '';
     const decor = t.decor.map((d) => `${FISH_DECORS[d.type].icon} ${FISH_DECORS[d.type].name}`).join('、');
     el.innerHTML = `
-      <div class="info-title">${T.name} <small>${unitsIn(t.id)}/${T.cap}</small></div>
+      <div class="info-title">${T.name} <small>みず ${T.liters}L</small></div>
       <div class="water-meter ${ws.cls}">
         <div class="wm-label">💧 みず：${ws.text}</div>
         <div class="wm-bar"><i style="width:${Math.max(3, t.water)}%"></i></div>
       </div>
+      <div class="water-meter crowd">
+        <div class="wm-label">🐟 こみぐあい：${Math.round(crowdIn(t) * 100)}%</div>
+        <div class="wm-bar"><i style="width:${Math.max(2, Math.min(100, crowdIn(t) * 100))}%"></i></div>
+        <div class="info-sub">めやす：${capText(T)}</div>
+      </div>
       ${equip ? `<div class="eq-list">${equip}</div>` : ''}
       ${T.level >= PUMP_FROM && !(t.equip.pump && t.equip.filter) ? '<div class="info-need">おみせの「きぐ」で エアポンプと ろかフィルターを つけると さかなを いれられるよ</div>' : ''}
       <div class="info-sub">${list.length ? 'さかなを タップすると くわしく みられるよ' : 'まだ さかなが いないよ。おみせで かおう'}</div>
-      <ul class="case-list">${list.map((x) => {
-        const m = fishMood(x);
-        return `<li data-id="${x.id}" class="${m.danger ? 'danger' : ''}">${FISH[x.species].icon} ${FISH[x.species].name} <small>${fishSizeText(x.size)}</small></li>`;
-      }).join('')}</ul>
+      <ul class="case-list">${fishChips(list)}</ul>
       <div class="info-sub">おきもの：${decor || 'なし'}（${t.decor.length}/${T.slots}）</div>
       <div class="info-need">${hungry ? `きょう えさが ほしい さかな：${hungry}ひき` : list.length ? 'きょうの えさは ばっちり！' : ''}
         ${t.changed === todayKey() ? '・きょうは みずかえ した' : ''}</div>`;
@@ -453,6 +469,26 @@ function renderFishInfo() {
     renderFishInfo();
   });
 }
+
+// さかなの ボタン。おおい ときは しゅるいごとに まとめる
+function fishChips(list) {
+  if (list.length <= 12) {
+    return list.map((x) => {
+      const m = fishMood(x);
+      return `<li data-id="${x.id}" class="${m.danger ? 'danger' : ''}">${FISH[x.species].icon} ${FISH[x.species].name} <small>${fishSizeText(x.size)}</small></li>`;
+    }).join('');
+  }
+  const groups = new Map();
+  for (const x of list) (groups.get(x.species) || groups.set(x.species, []).get(x.species)).push(x);
+  return [...groups].map(([k, xs]) => {
+    const danger = xs.some((x) => fishMood(x).danger);
+    return `<li data-id="${xs[0].id}" class="${danger ? 'danger' : ''}">${FISH[k].icon} ${FISH[k].name} <small>×${xs.length}</small></li>`;
+  }).join('');
+}
+
+// すいそうごとの めやす（その さかな だけ なら なんびき）
+const capText = (T) => Object.entries(T.cap).filter(([k]) => k !== 'himedaka')
+  .map(([k, n]) => `${FISH[k].name} ${n > APP_MAX_FISH ? `${n}ぴき（アプリでは ${APP_MAX_FISH}ぴき まで）` : `${n}ぴき`}`).join('・');
 
 // すいそうの さかな ぜんぶに えさ
 function feedTank() {
@@ -533,7 +569,7 @@ function openFishShop(tab) {
   } else if (aq.shopTab === 'tank') {
     for (const [k, x] of Object.entries(TANKS)) {
       if (!x.price) continue;
-      rows.push(shopRow({ icon: x.icon, name: x.name, price: x.price, points, desc: x.desc, action: `tank:${k}` }));
+      rows.push(shopRow({ icon: x.icon, name: x.name, price: x.price, points, desc: `みず ${x.liters}L。${x.desc}。めやす：${capText(x)}`, action: `tank:${k}` }));
     }
   } else if (aq.shopTab === 'equip') {
     for (const [k, e] of Object.entries(EQUIPS)) {
@@ -692,7 +728,7 @@ function showFishDetail(k) {
     el.innerHTML = `<div class="info-title">？？？</div><div class="info-sub">おみせで かうと わかるよ。${sp.price}pt</div>`;
     return;
   }
-  const need = Object.values(TANKS).find((x) => x.level === sp.level).name;
+  const need = Object.values(TANKS).find((x) => x.cap[k]).name;
   el.innerHTML = `
     <div class="info-title">${sp.icon} ${sp.name}</div>
     <div id="fzukan-3d" class="zukan-3d fish-3d"></div>
