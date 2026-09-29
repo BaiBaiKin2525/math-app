@@ -1326,7 +1326,18 @@ export function createInsectRoom(container, { onSelect }) {
           a.rest = Math.random() < 0.5 ? 0.5 + Math.random() * 2.5 : 0;
         }
       } else {
-        const want = Math.atan2(dx, dz);
+        // ほかの むしが いたら よけて すすむ。ずっと ふさがれて いたら いきさきを かえる
+        const av = avoidance(a);
+        const want = Math.atan2(dx / dist + av.x * 1.8, dz / dist + av.z * 1.8);
+        if (av.blocked) {
+          a.blocked = (a.blocked || 0) + dt;
+          if (a.blocked > 1.5) {
+            a.target = randomSpot();
+            a.blocked = 0;
+          }
+        } else {
+          a.blocked = 0;
+        }
         let diff = want - g.rotation.y;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         g.rotation.y += Math.sign(diff) * Math.min(Math.abs(diff), dt * 2.5);
@@ -1344,6 +1355,64 @@ export function createInsectRoom(container, { onSelect }) {
     a.shadow.rotation.z = g.rotation.y;
   }
 
+  // ---------- むしどうしが かさならない ----------
+  // じめんを あるいている むし（おきもので あそんでいる・つちの なかの むしは のぞく）
+  const onGround = (a) => a.walker && !a.play && a.g.visible;
+  const bodyR = (a) => a.len * 0.33;
+
+  // まわりの むしから はなれる むき。まえが ふさがって いれば blocked
+  function avoidance(a) {
+    let x = 0;
+    let z = 0;
+    let blocked = false;
+    const fx = Math.sin(a.g.rotation.y);
+    const fz = Math.cos(a.g.rotation.y);
+    for (const b of actors.values()) {
+      if (b === a || !onGround(b)) continue;
+      const dx = a.g.position.x - b.g.position.x;
+      const dz = a.g.position.z - b.g.position.z;
+      const d = Math.hypot(dx, dz) || 0.001;
+      const near = (bodyR(a) + bodyR(b)) * 1.7;
+      if (d > near) continue;
+      const k = (near - d) / near;
+      x += (dx / d) * k;
+      z += (dz / d) * k;
+      if (d < (bodyR(a) + bodyR(b)) * 1.15 && -(dx * fx + dz * fz) / d > 0.5) blocked = true;
+    }
+    return { x, z, blocked };
+  }
+
+  // かさなって いたら おしあって はなす（はんぶんずつ）
+  function separateAll() {
+    const list = [...actors.values()].filter(onGround);
+    for (let pass = 0; pass < 4; pass++) {
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i].g.position;
+          const b = list[j].g.position;
+          const dx = a.x - b.x;
+          const dz = a.z - b.z;
+          const min = bodyR(list[i]) + bodyR(list[j]);
+          const d = Math.hypot(dx, dz);
+          if (d >= min) continue;
+          const ux = d > 1e-4 ? dx / d : Math.random() - 0.5;
+          const uz = d > 1e-4 ? dz / d : Math.random() - 0.5;
+          const push = (min - d) / 2;
+          a.x += ux * push;
+          a.z += uz * push;
+          b.x -= ux * push;
+          b.z -= uz * push;
+        }
+      }
+    }
+    for (const a of list) {
+      const p = a.g.position;
+      p.x = Math.max(-bounds.x, Math.min(bounds.x, p.x));
+      p.z = Math.max(-bounds.z, Math.min(bounds.z, p.z));
+      followGround(a);
+    }
+  }
+
   const clock = new THREE.Clock();
   let raf = 0;
   function loop() {
@@ -1351,6 +1420,7 @@ export function createInsectRoom(container, { onSelect }) {
     const dt = Math.min(clock.getDelta(), 0.05);
     const t = clock.elapsedTime;
     for (const a of actors.values()) step(a, dt, t);
+    separateAll();
     const s = selected && actors.get(selected);
     if (s) ring.position.set(s.g.position.x, Math.max(0.04, s.g.position.y), s.g.position.z);
     controls.update();
@@ -1369,6 +1439,17 @@ export function createInsectRoom(container, { onSelect }) {
   }
 
   // たしかめ よう：いま なにを しているか
+  const minGap = () => {
+    const list = [...actors.values()].filter(onGround);
+    let worst = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const d = list[i].g.position.distanceTo(list[j].g.position) - bodyR(list[i]) - bodyR(list[j]);
+        worst = Math.min(worst, d);
+      }
+    }
+    return worst;
+  };
   const debug = () => [...actors.values()].map((a) => ({
     id: a.pet.id, play: a.play ? `${a.play.decor.type}:${a.play.phase}` : null,
     y: Math.round(a.g.position.y * 10) / 10, visible: a.g.visible,
@@ -1380,6 +1461,7 @@ export function createInsectRoom(container, { onSelect }) {
     for (let i = 0; i < seconds / 0.05; i++) {
       fakeT += 0.05;
       for (const a of actors.values()) step(a, 0.05, fakeT);
+      separateAll();
     }
   };
 
@@ -1400,5 +1482,5 @@ export function createInsectRoom(container, { onSelect }) {
     return renderer.domElement.toDataURL('image/jpeg', 0.85);
   };
 
-  return { setCase, setPets, select, dispose, debug, advance, lookAt, snapshot };
+  return { setCase, setPets, select, dispose, debug, advance, lookAt, snapshot, minGap };
 }
