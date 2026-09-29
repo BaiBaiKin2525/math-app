@@ -1,13 +1,14 @@
-# きんぎょの なかまの 3D モデルを Blender で つくって models/*.glb に かきだす。
+# さかなの 3D モデルを Blender で つくって models/*.glb に かきだす（メダカいがい）。
 #   つかいかた（math-app フォルダで）:
-#     "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python blender/goldfish.py -- wakin 1
+#     "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python blender/fishgen.py -- wakin 1
 #     しゅるい：wakin（わきん）・ryukin（りゅうきん）・pinpon（ピンポンパール）・demekin（でめきん）・tancho（たんちょう らんちゅう）
-#     さいごの かずは もようの ちがい（さらさ もようが 1ぴきずつ ちがう ように いくつか つくる）
+#               betta（ベタ）・guppy（グッピー）・neon（ネオンテトラ）・angel（エンゼルフィッシュ）・arowana（アロワナ）
+#     さいごの かずは もようの ちがい（さらさ もようや いろちがいを いくつか つくる）
 #   ふつうは node blender/build.mjs で ぜんぶ つくる
 #
 # アプリ（three.js）での きまり（medaka.py と おなじ）：
 #   ・ながさ 1。はなさき z=+0.5、おびれの さき z=-0.5 ふきん、せなかが +y
-#   ・メッシュの なまえ：body・fins（くねらせる）、それいがい（iris・pupil・wen・stalk）は うごかさない
+#   ・メッシュの なまえ：body・fins（くねらせる）、それいがい（iris・pupil・wen・stalk・barbel）は うごかさない
 #   ・fins の uv.y は ひれの ねもと 0 → さき 1
 
 import math
@@ -85,6 +86,51 @@ SPECS = {
         eye=dict(s=0.9, a=1.55, r=0.028), scales=(20, 10), wen=True,
         dorsal=None, anal=dict(t=(0.12, 0.24), h=0.08, double=0.05),
         tail=dict(len=0.22, span=0.12, kind='fork', fork=0.25, split=0.2, lift=0.04, round=0.4), pect=0.09, pelvic=0.08,
+    ),
+    'betta': dict(
+        zT=-0.12, round=0.9,
+        top=[0.025, 0.035, 0.06, 0.075, 0.08, 0.078, 0.07, 0.06, 0.045, 0.028, 0.012],
+        bot=[-0.025, -0.035, -0.06, -0.075, -0.08, -0.076, -0.066, -0.054, -0.04, -0.024, -0.008],
+        wid=[0.012, 0.018, 0.03, 0.038, 0.042, 0.042, 0.04, 0.035, 0.027, 0.016, 0.004],
+        eye=dict(s=0.865, a=1.2, r=0.03, iris=(0.5, 0.35, 0.1)), scales=(26, 12), head_scales=True,
+        dorsal=dict(t=(0.06, 0.44), h=0.2, sweep=0.8, shape='long'), anal=dict(t=(0.0, 0.62), h=0.27, sweep=0.55, shape='long'),
+        tail=dict(len=0.44, span=0.3, kind='fork', fork=-0.35, round=0.25, droop=0.05), pect=0.07, pelvic=0.16, pelvic_long=True,
+    ),
+    'guppy': dict(
+        zT=-0.2, round=0.9,
+        top=[0.024, 0.03, 0.052, 0.07, 0.078, 0.078, 0.072, 0.062, 0.048, 0.03, 0.012],
+        bot=[-0.024, -0.032, -0.058, -0.078, -0.085, -0.08, -0.07, -0.056, -0.042, -0.026, -0.01],
+        wid=[0.011, 0.015, 0.028, 0.038, 0.042, 0.043, 0.041, 0.036, 0.028, 0.016, 0.004],
+        eye=dict(s=0.87, a=1.1, r=0.034, iris=(0.8, 0.8, 0.75)), scales=(28, 12), head_scales=True, scale_edge=0.07,
+        dorsal=dict(t=(0.2, 0.4), h=0.11, sweep=0.7), anal=dict(t=(0.24, 0.34), h=0.05),
+        tail=dict(len=0.36, span=0.28, kind='fork', fork=-0.18, round=0.1), pect=0.07, pelvic=0.04,
+    ),
+    'neon': dict(
+        zT=-0.3, round=0.9,
+        top=[0.022, 0.028, 0.045, 0.06, 0.068, 0.07, 0.066, 0.058, 0.046, 0.03, 0.012],
+        bot=[-0.022, -0.03, -0.052, -0.068, -0.074, -0.07, -0.062, -0.05, -0.038, -0.024, -0.009],
+        wid=[0.01, 0.013, 0.024, 0.032, 0.036, 0.037, 0.035, 0.031, 0.025, 0.015, 0.004],
+        eye=dict(s=0.87, a=1.05, r=0.038, iris=(0.35, 0.55, 0.8)), scales=(30, 13), head_scales=True, scale_edge=0.06,
+        dorsal=dict(t=(0.36, 0.48), h=0.08), anal=dict(t=(0.1, 0.36), h=0.06),
+        tail=dict(len=0.22, span=0.1, kind='fork', fork=0.55), pect=0.06, pelvic=0.04,
+    ),
+    'angel': dict(
+        zT=-0.2, round=0.9,
+        top=[0.03, 0.06, 0.14, 0.22, 0.26, 0.27, 0.25, 0.2, 0.13, 0.06, 0.016],
+        bot=[-0.03, -0.06, -0.14, -0.22, -0.26, -0.27, -0.245, -0.2, -0.13, -0.055, -0.012],
+        wid=[0.01, 0.015, 0.026, 0.034, 0.038, 0.04, 0.04, 0.037, 0.03, 0.018, 0.004],
+        eye=dict(s=0.85, a=1.25, r=0.034, iris=(0.8, 0.14, 0.08)), scales=(34, 16), head_scales=True,
+        dorsal=dict(t=(0.18, 0.58), h=0.38, sweep=0.95, shape='peak'), anal=dict(t=(0.18, 0.56), h=0.42, sweep=0.9, shape='peak'), scale_edge=0.06,
+        tail=dict(len=0.22, span=0.22, kind='fork', fork=0.55), pect=0.07, pelvic=0.45, pelvic_long=True,
+    ),
+    'arowana': dict(
+        zT=-0.36, round=0.85,
+        top=[0.022, 0.03, 0.05, 0.068, 0.075, 0.078, 0.078, 0.074, 0.066, 0.052, 0.032],
+        bot=[-0.022, -0.032, -0.058, -0.082, -0.094, -0.098, -0.094, -0.082, -0.064, -0.042, -0.012],
+        wid=[0.011, 0.016, 0.03, 0.042, 0.048, 0.05, 0.05, 0.048, 0.042, 0.03, 0.012],
+        eye=dict(s=0.9, a=0.95, r=0.026, iris=(0.85, 0.7, 0.3)), scales=(11, 5), head_scales=False, barbel=True, scale_edge=0.3,
+        dorsal=dict(t=(0.04, 0.3), h=0.07, sweep=0.6, shape='long'), anal=dict(t=(0.02, 0.42), h=0.09, sweep=0.6, shape='long'),
+        tail=dict(len=0.14, span=0.08, kind='fork', fork=-0.3, round=0.2), pect=0.08, pelvic=0.04,
     ),
 }
 SP = SPECS[KIND]
@@ -168,11 +214,13 @@ def body_texture(W=512, H=256):
     S, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
     A = Vv * 2 * math.pi
     d = (1 + np.cos(A)) / 2  # 1 せなか → 0 おなか
-    pal = PALETTE[KIND]
-    red = np.array(pal['red'])
-    red2 = np.array(pal['red2'])
-    white = np.array(pal['white'])
-    col = red * d[..., None] + red2 * (1 - d[..., None])  # おなかは すこし あかるい
+    if KIND in PAINTERS:
+        col = PAINTERS[KIND](S, Vv, d)
+        pal = {'white_amount': 0}
+    else:
+        pal = PALETTE[KIND]
+        col = np.array(pal['red']) * d[..., None] + np.array(pal['red2']) * (1 - d[..., None])  # おなかは すこし あかるい
+    white = np.array(pal.get('white', [1, 1, 1]))
     # さらさ（あかと しろの もよう）
     if pal['white_amount'] > 0:
         wm = blobs(S, Vv, 9 + PATTERN * 3, (0.1, 0.26))
@@ -184,15 +232,21 @@ def body_texture(W=512, H=256):
         cap = smoothstep(0.83, 0.87, S) * smoothstep(0.97, 0.95, S) * smoothstep(0.5, 0.72, d)
         col = col * (1 - cap[..., None]) + np.array([0.86, 0.12, 0.05]) * cap[..., None]
     dome, edge = scale_field(S, Vv, *SP['scales'])
-    # あたまには うろこが ない
-    body_part = smoothstep(0.84, 0.77, S)
+    # きんぎょの あたまには うろこが ない
+    body_part = np.ones_like(S) * 0.6 if SP.get('head_scales') else smoothstep(0.84, 0.77, S)
+    if SP.get('head_scales'):
+        body_part = np.maximum(body_part, smoothstep(0.86, 0.8, S))
     dome = dome * body_part
     edge = edge * body_part
     height = dome * 0.5 - edge * 0.4
-    shade = 1 - 0.16 * edge
+    shade = 1 - SP.get('scale_edge', 0.16) * edge
     if KIND == 'demekin':
         shade = 1 - 0.06 * edge  # ビロードの ような からだ
-    col = col * shade[..., None] + (dome ** 3 * (0.04 if KIND != 'demekin' else 0.015))[..., None]
+    sheen = np.array(SHEEN.get(KIND, (1, 1, 1)))
+    col = col * shade[..., None] + (dome ** 3)[..., None] * sheen * (0.04 if KIND != 'demekin' else 0.015)
+    if KIND == 'arowana':
+        # おおきな うろこの ふちが ももいろに ひかる
+        col = col + edge[..., None] * np.array([0.12, 0.05, 0.07])
     if SP.get('pearl'):
         # ちんじゅりん：うろこの まんなかが しろく まるく もりあがる
         pearl = body_part * np.clip(1 - np.hypot(((S * SP['scales'][0] + 0.5 * (np.floor(Vv * SP['scales'][1] * 2) % 2)) % 1 - 0.5), ((Vv * SP['scales'][1] * 2) % 1 - 0.5) * 0.9) * 3.2, 0, 1)
@@ -204,6 +258,65 @@ def body_texture(W=512, H=256):
     col *= (1 - 0.35 * smoothstep(0.975, 0.995, S))[..., None]
     img = np.concatenate([np.clip(col, 0, 1), np.ones((H, W, 1))], axis=2)
     return img, height
+
+
+def lerp3(a, b, k):
+    return np.array(a) * (1 - k[..., None]) + np.array(b) * k[..., None]
+
+
+def blob_mask(S, Vv, pts):
+    m = np.zeros_like(S)
+    for cs, cv, rs, rv in pts:
+        dv = np.minimum(np.abs(Vv - cv), 1 - np.abs(Vv - cv))
+        m = np.maximum(m, np.exp(-(((S - cs) / rs) ** 2 + (dv / rv) ** 2) * 2.5))
+    return m
+
+
+def paint_betta(S, Vv, d):
+    if PATTERN == 1:  # あおい ベタ
+        col = lerp3([0.42, 0.1, 0.4], [0.1, 0.2, 0.72], smoothstep(0.2, 0.7, d))
+    else:  # あかい ベタ
+        col = lerp3([0.45, 0.04, 0.12], [0.72, 0.06, 0.1], smoothstep(0.2, 0.7, d))
+    return col * (1 - 0.25 * smoothstep(0.85, 0.95, S))[..., None]
+
+
+def paint_guppy(S, Vv, d):
+    col = lerp3([0.9, 0.9, 0.86], [0.55, 0.58, 0.5], smoothstep(0.3, 0.75, d))
+    rear = smoothstep(0.5, 0.3, S)
+    if PATTERN == 1:  # オレンジと あおの もよう
+        spots = [(0.12, 0.3, 0.07, 0.08), (0.25, 0.7, 0.06, 0.08), (0.08, 0.75, 0.05, 0.06), (0.3, 0.25, 0.05, 0.06)]
+        col = lerp3(col, [1.0, 0.5, 0.1], blob_mask(S, Vv, spots) * rear)
+        col = lerp3(col, [0.2, 0.45, 1.0], blob_mask(S, Vv, [(0.18, 0.5, 0.05, 0.05), (0.05, 0.1, 0.04, 0.05)]) * rear)
+    else:  # うしろ はんぶんが くろい（タキシード）
+        col = lerp3(col, [0.08, 0.1, 0.18], smoothstep(0.55, 0.35, S) * 0.95)
+    return col
+
+
+def paint_neon(S, Vv, d):
+    col = lerp3([0.9, 0.9, 0.88], [0.44, 0.46, 0.36], smoothstep(0.55, 0.8, d))
+    stripe = smoothstep(0.08, 0.02, np.abs(d - 0.62)) * smoothstep(0.16, 0.26, S) * smoothstep(0.95, 0.86, S)
+    red = smoothstep(0.08, 0.16, d) * smoothstep(0.54, 0.46, d) * smoothstep(0.56, 0.44, S)
+    col = lerp3(col, [0.92, 0.12, 0.15], red * 0.95)
+    return lerp3(col, [0.15, 0.85, 1.0], stripe)
+
+
+def paint_angel(S, Vv, d):
+    col = lerp3([0.92, 0.92, 0.88], [0.72, 0.72, 0.64], smoothstep(0.6, 0.95, d))
+    for c in (0.28, 0.56, 0.855):
+        col = lerp3(col, [0.08, 0.08, 0.07], smoothstep(0.03, 0.014, np.abs(S - c)) * 0.92)
+    return col
+
+
+def paint_arowana(S, Vv, d):
+    col = lerp3([0.9, 0.9, 0.9], [0.45, 0.52, 0.52], smoothstep(0.5, 0.9, d))
+    # うえむきの おおきな くち（あごの せん）
+    jaw = smoothstep(0.012, 0.003, np.abs((d - 0.62) - (S - 0.9) * 2.2)) * smoothstep(0.9, 0.93, S)
+    return lerp3(col, [0.15, 0.15, 0.15], jaw * 0.8)
+
+
+PAINTERS = {'betta': paint_betta, 'guppy': paint_guppy, 'neon': paint_neon, 'angel': paint_angel, 'arowana': paint_arowana}
+# うろこの ひかり（ベタ・ネオンは あおく ひかる）
+SHEEN = {'betta': (2.5, 4.5, 8.0), 'neon': (1.5, 2.5, 3.5), 'guppy': (1.5, 1.5, 1.5), 'angel': (1.5, 1.5, 1.5), 'arowana': (1.2, 1.2, 1.3)}
 
 
 def normal_from_height(h, strength=4.0):
@@ -220,19 +333,36 @@ FIN_COLORS = {
     'pinpon': ([0.97, 0.55, 0.18], [0.99, 0.93, 0.86], 0.78, 0.45),
     'demekin': ([0.08, 0.07, 0.1], [0.14, 0.12, 0.16], 0.92, 0.72),
     'tancho': ([0.97, 0.95, 0.94], [0.99, 0.97, 0.97], 0.62, 0.35),
+    'betta': ([0.12, 0.25, 0.8], [0.85, 0.1, 0.22], 0.92, 0.7),
+    'guppy': ([1.0, 0.55, 0.15], [0.2, 0.35, 1.0], 0.9, 0.7),
+    'neon': ([0.9, 0.92, 0.92], [0.96, 0.97, 0.97], 0.35, 0.2),
+    'angel': ([0.86, 0.86, 0.82], [0.96, 0.96, 0.95], 0.6, 0.3),
+    'arowana': ([0.55, 0.55, 0.5], [0.75, 0.62, 0.45], 0.85, 0.6),
+}
+FIN_VARIANT = {
+    ('betta', 2): ([0.6, 0.04, 0.08], [0.95, 0.2, 0.2], 0.92, 0.7),
+    ('guppy', 2): ([0.1, 0.6, 0.8], [0.1, 0.15, 0.85], 0.9, 0.7),
 }
 
 
 def fin_texture(W=256, H=128):
     U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
     r = 1 - Vv  # ねもと 0 → さき 1
-    base, tip, a0, a1 = FIN_COLORS[KIND]
+    base, tip, a0, a1 = FIN_VARIANT.get((KIND, PATTERN), FIN_COLORS[KIND])
     f = (U * 10) % 1
     ray = smoothstep(0.1, 0.02, np.minimum(f, 1 - f))
     k = smoothstep(0.2, 0.95, r)[..., None]
     col = np.array(base) * (1 - k) + np.array(tip) * k
     col = col * (1 - 0.22 * ray[..., None])
     alpha = a0 - (a0 - a1) * r + 0.12 * ray
+    if KIND == 'guppy':
+        # おびれの くろい てんてん
+        spots = np.zeros_like(U)
+        for _ in range(40):
+            cu, cr, rr = rng.random(), 0.3 + rng.random() * 0.65, 0.012 + rng.random() * 0.02
+            spots = np.maximum(spots, smoothstep(rr, rr * 0.5, np.hypot((U - cu) * 2.5, r - cr)))
+        col = col * (1 - 0.8 * spots[..., None])
+        alpha = np.maximum(alpha, spots * 0.9)
     return np.concatenate([np.clip(col, 0, 1), np.clip(alpha, 0, 1)[..., None]], axis=2)
 
 
@@ -340,26 +470,35 @@ def fin_strip(bm, uvl, base, edge, n=12, m=6, rays=1.0, curve_fn=None):
                 loop[uvl].uv = c[1]
 
 
+# ひれの たかさの かわりかた（s：0 うしろ → 1 まえ）
+FIN_SHAPES = {
+    'normal': lambda s: math.sin(math.pi * (0.04 + 0.96 * s)) ** 0.45 * (0.55 + 0.45 * s),
+    'anal': lambda s: math.sin(math.pi * (0.05 + 0.95 * s)) ** 0.4,
+    'long': lambda s: math.sin(math.pi * (0.03 + 0.97 * s)) ** 0.22,  # ベタ・アロワナ：ながく ひろい
+    'peak': lambda s: math.sin(math.pi * min(1, s ** 1.4 * 1.02)) ** 0.5,  # エンゼル：まえが たかく とがる
+}
+
+
 def build_fins(material):
     bm = bmesh.new()
     uvl = bm.loops.layers.uv.new('UVMap')
     d = SP['dorsal']
     if d:
-        prof = lambda s: math.sin(math.pi * (0.04 + 0.96 * s)) ** 0.45 * (0.55 + 0.45 * s)
+        prof = FIN_SHAPES[d.get('shape', 'normal')]
         fin_strip(bm, uvl,
                   lambda s: (0, top(d['t'][0] + (d['t'][1] - d['t'][0]) * s) - 0.004, Z(d['t'][0] + (d['t'][1] - d['t'][0]) * s)),
                   lambda s: (0, top(d['t'][0] + (d['t'][1] - d['t'][0]) * s) + d['h'] * prof(s),
-                             Z(d['t'][0] + (d['t'][1] - d['t'][0]) * s) - d['h'] * prof(s) * d['sweep']),
+                             Z(d['t'][0] + (d['t'][1] - d['t'][0]) * s) - d['h'] * prof(s) * d.get('sweep', 0.35)),
                   n=16, m=8, rays=2.0)
     a = SP['anal']
     sides = [a['double'], -a['double']] if a.get('double') else [0]
     for side in sides:
-        prof = lambda s: math.sin(math.pi * (0.05 + 0.95 * s)) ** 0.4
+        prof = FIN_SHAPES[a.get('shape', 'anal')]
         fin_strip(bm, uvl,
                   lambda s: (side * 0.1 * wid(0.2), bot(a['t'][0] + (a['t'][1] - a['t'][0]) * s) + 0.004, Z(a['t'][0] + (a['t'][1] - a['t'][0]) * s)),
                   lambda s: (side, bot(a['t'][0] + (a['t'][1] - a['t'][0]) * s) - a['h'] * prof(s),
-                             Z(a['t'][0] + (a['t'][1] - a['t'][0]) * s) - a['h'] * 0.6 * prof(s)),
-                  n=8, m=7, rays=0.8)
+                             Z(a['t'][0] + (a['t'][1] - a['t'][0]) * s) - a['h'] * a.get('sweep', 0.6) * prof(s)),
+                  n=14 if a.get('shape') else 8, m=8, rays=1.6 if a.get('shape') else 0.8)
     t = SP['tail']
     split = t.get('split', 0)
     for side in ([1, -1] if split else [0]):
@@ -387,10 +526,17 @@ def build_fins(material):
         pv = SP['pelvic']
         px = side * wid(s1) * 0.45
         py = bot(s1) + 0.01
-        fin_strip(bm, uvl,
-                  lambda s, px=px, py=py: (px, py, Z(s1) - 0.03 * s),
-                  lambda s, px=px, py=py, side=side: (px + side * pv * 0.3, py - pv * (1 - 0.45 * s), Z(s1) - pv * 0.55 - 0.03 * s),
-                  n=5, m=5, rays=0.6)
+        if SP.get('pelvic_long'):
+            # エンゼル・ベタ：ほそくて ながい はらびれ
+            fin_strip(bm, uvl,
+                      lambda s, px=px, py=py: (px, py, Z(0.62) - 0.012 * s),
+                      lambda s, px=px, py=py, side=side: (px + side * pv * 0.08, py - pv * (1 - 0.1 * s), Z(0.62) - pv * 0.25 - 0.008 * s),
+                      n=2, m=10, rays=0.2)
+        else:
+            fin_strip(bm, uvl,
+                      lambda s, px=px, py=py: (px, py, Z(s1) - 0.03 * s),
+                      lambda s, px=px, py=py, side=side: (px + side * pv * 0.3, py - pv * (1 - 0.45 * s), Z(s1) - pv * 0.55 - 0.03 * s),
+                      n=5, m=5, rays=0.6)
     return new_object('fins', bm, material)
 
 
@@ -436,6 +582,21 @@ def build_eyes(iris_mat, pupil_mat, stalk_mat):
         bs.free()
 
 
+def build_barbels(mat):
+    bm = bmesh.new()
+    s0 = 0.985
+    for side in (1, -1):
+        base = np.array([side * wid(s0) * 0.5, bot(s0) + 0.004, Z(s0)])
+        tip = base + np.array([side * 0.012, 0.03, 0.07])
+        for k in range(8):
+            q = k / 7
+            c = base * (1 - q) + tip * q
+            rr = 0.005 * (1 - q * 0.7)
+            sphere_into(bm, c, (rr, rr, rr), 8, 6)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return new_object('barbel', bm, mat)
+
+
 def build_wen(mat):
     """にくりゅう：あたまの うえの つぶつぶ（たんちょうは あかい）"""
     bm = bmesh.new()
@@ -456,17 +617,19 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     tex, height = body_texture()
     body_img = make_image(f'{NAME}_body', tex)
-    nrm_img = make_image(f'{NAME}_normal', normal_from_height(height, 5 if SP.get('pearl') else 3), non_color=True)
     fin_img = make_image(f'{NAME}_fin', fin_texture())
     velvet = KIND == 'demekin'
-    body_mat = make_material('body', body_img, nrm_img, rough=0.62 if velvet else 0.4, metal=0.0 if velvet else 0.06)
+    body_mat = make_material('body', body_img, None, rough=0.62 if velvet else 0.4, metal=0.0 if velvet else 0.06)
     fin_mat = make_material('fin', fin_img, rough=0.5, alpha=True)
-    iris = make_material('iris', color=(0.1, 0.08, 0.07, 1) if velvet else (0.85, 0.66, 0.3, 1), rough=0.35, metal=0.5)
+    ic = SP['eye'].get('iris')
+    iris = make_material('iris', color=(0.1, 0.08, 0.07, 1) if velvet else (*(ic or (0.85, 0.66, 0.3)), 1), rough=0.35, metal=0.5)
     pupil = make_material('pupil', color=(0.01, 0.01, 0.01, 1), rough=0.05)
     stalk = make_material('stalk', color=(0.06, 0.05, 0.08, 1), rough=0.6)
     build_body(body_mat)
     build_fins(fin_mat)
     build_eyes(iris, pupil, stalk)
+    if SP.get('barbel'):
+        build_barbels(make_material('barbel', color=(0.35, 0.33, 0.3, 1), rough=0.5))
     if SP.get('wen'):
         build_wen(make_material('wen', color=(0.55, 0.012, 0.006, 1), rough=0.55))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

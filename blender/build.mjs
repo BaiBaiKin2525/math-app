@@ -10,11 +10,16 @@ const BLENDER = process.env.BLENDER || 'C:/Program Files/Blender Foundation/Blen
 const MODELS = [
   ['blender/medaka.py', 'medaka', ['medaka']],
   ['blender/medaka.py', 'himedaka', ['himedaka']],
-  ...[1, 2, 3].map((n) => ['blender/goldfish.py', `wakin_${n}`, ['wakin', n]]),
-  ...[1, 2].map((n) => ['blender/goldfish.py', `ryukin_${n}`, ['ryukin', n]]),
-  ...[1, 2].map((n) => ['blender/goldfish.py', `pinpon_${n}`, ['pinpon', n]]),
-  ['blender/goldfish.py', 'demekin_1', ['demekin', 1]],
-  ['blender/goldfish.py', 'tancho_1', ['tancho', 1]],
+  ...[1, 2, 3].map((n) => ['blender/fishgen.py', `wakin_${n}`, ['wakin', n]]),
+  ...[1, 2].map((n) => ['blender/fishgen.py', `ryukin_${n}`, ['ryukin', n]]),
+  ...[1, 2].map((n) => ['blender/fishgen.py', `pinpon_${n}`, ['pinpon', n]]),
+  ['blender/fishgen.py', 'demekin_1', ['demekin', 1]],
+  ['blender/fishgen.py', 'tancho_1', ['tancho', 1]],
+  ...[1, 2].map((n) => ['blender/fishgen.py', `betta_${n}`, ['betta', n]]),
+  ...[1, 2].map((n) => ['blender/fishgen.py', `guppy_${n}`, ['guppy', n]]),
+  ['blender/fishgen.py', 'neon_1', ['neon', 1]],
+  ['blender/fishgen.py', 'angel_1', ['angel', 1]],
+  ['blender/fishgen.py', 'arowana_1', ['arowana', 1]],
 ];
 
 const only = process.argv[2];

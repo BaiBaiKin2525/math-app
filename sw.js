@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v32';
+const VERSION = 'v34';
 const FILES = [
   './',
   'index.html',
@@ -42,6 +42,13 @@ const FILES = [
   'models/pinpon_2.glb',
   'models/demekin_1.glb',
   'models/tancho_1.glb',
+  'models/betta_1.glb',
+  'models/betta_2.glb',
+  'models/guppy_1.glb',
+  'models/guppy_2.glb',
+  'models/neon_1.glb',
+  'models/angel_1.glb',
+  'models/arowana_1.glb',
   'settings.js',
   'manifest.json',
   'icons/icon-192.png',

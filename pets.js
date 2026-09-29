@@ -341,6 +341,7 @@ function openPets() {
 }
 
 function closePets() {
+  setExpanded('pets', false);
   if (pets.room) pets.room.dispose();
   pets.room = null;
   $('room3d').querySelectorAll('canvas').forEach((c) => c.remove());
@@ -770,6 +771,16 @@ async function mountZukanModel(opts) {
     if (box) box.remove(); // 3D が つかえない ときは せつめい だけ
   }
 }
+
+// 3D を がめん いっぱいに ひろげる（むしの おへや・さかなの おへや）
+function setExpanded(screen, on) {
+  $(screen).classList.toggle('expanded', on);
+  const btn = $(screen).querySelector('.expand-btn');
+  if (btn) btn.textContent = on ? '↙ もとに もどす' : '⛶ おおきく';
+}
+document.querySelectorAll('.expand-btn').forEach((b) => b.addEventListener('click', () => {
+  setExpanded(b.dataset.screen, !$(b.dataset.screen).classList.contains('expanded'));
+}));
 
 $('pets-back').addEventListener('click', closePets);
 $('feed-btn').addEventListener('click', feedCase);

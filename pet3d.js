@@ -904,8 +904,8 @@ export function createInsectRoom(container, { onSelect }) {
     if (!caseDims) return;
     const [w, d, h] = caseDims;
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const byWidth = (w * 0.6) / (tanV * camera.aspect);
-    const byHeight = ((h + SOIL) * 0.7 + d * 0.3) / tanV;
+    const byWidth = (w * 0.55) / (tanV * camera.aspect);
+    const byHeight = ((h + SOIL) * 0.6 + d * 0.27) / tanV;
     const dist = Math.max(byWidth, byHeight);
     // すこし ひくめから：つちの なかの ようちゅうも みえる
     camera.position.set(0, dist * 0.42, dist * 0.9);

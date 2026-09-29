@@ -348,6 +348,7 @@ function openFish() {
 }
 
 function closeFish() {
+  setExpanded('fish', false);
   if (aq.room) aq.room.dispose();
   aq.room = null;
   $('tank3d').querySelectorAll('canvas').forEach((c) => c.remove());

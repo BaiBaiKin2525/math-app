@@ -397,6 +397,11 @@ const MODEL_URLS = {
   pinpon: ['models/pinpon_1.glb', 'models/pinpon_2.glb'],
   demekin: ['models/demekin_1.glb'],
   tancho: ['models/tancho_1.glb'],
+  betta: ['models/betta_1.glb', 'models/betta_2.glb'],
+  guppy: ['models/guppy_1.glb', 'models/guppy_2.glb'],
+  neon: ['models/neon_1.glb'],
+  angel: ['models/angel_1.glb'],
+  arowana: ['models/arowana_1.glb'],
 };
 const GLB = {};
 const modelListeners = new Set();
@@ -1982,17 +1987,17 @@ export function createAquarium(container, { onSelect }) {
     const [w, d, h] = tank.size;
     let dist;
     if (spec.shape === 'basin') {
-      dist = Math.max((w * 0.6) / (tanV * camera.aspect), (w * 0.5) / tanV);
+      dist = Math.max((w * 0.54) / (tanV * camera.aspect), (w * 0.46) / tanV);
       camera.position.set(0, dist * 0.84, dist * 0.55);
       controls.target.set(0, 4, 1);
     } else if (spec.shape === 'bowl') {
-      dist = Math.max((w * 0.75) / (tanV * camera.aspect), (h * 0.72) / tanV) + w * 0.3;
-      camera.position.set(0, h * 0.62 + dist * 0.2, dist);
-      controls.target.set(0, h * 0.45, 0);
+      dist = Math.max((w * 0.66) / (tanV * camera.aspect), (h * 0.62) / tanV) + w * 0.3;
+      camera.position.set(0, h * 0.62 + dist * 0.18, dist);
+      controls.target.set(0, h * 0.5, 0);
     } else {
-      dist = Math.max((w * 0.6) / (tanV * camera.aspect), (h * 0.74) / tanV) + d * 0.5;
-      camera.position.set(0, h * 0.55 + dist * 0.14, dist);
-      controls.target.set(0, h * 0.47, 0);
+      dist = Math.max((w * 0.54) / (tanV * camera.aspect), (h * 0.6) / tanV) + d * 0.5;
+      camera.position.set(0, h * 0.6 + dist * 0.12, dist);
+      controls.target.set(0, h * 0.52, 0);
     }
     controls.minDistance = dist * 0.3;
     controls.maxDistance = dist * 1.6;
