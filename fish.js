@@ -367,6 +367,8 @@ async function mountTank() {
   try {
     if (/[?&]flat=1/.test(location.search)) throw new Error('URL の flat=1 で かんたん ひょうじを えらんでいます');
     const mod = await import('./fish3d.js');
+    // みずくさ・きぐの モデルを すこし まつ（まにあわなければ あとで おきかわる）
+    await Promise.race([mod.loadProps(), new Promise((r) => setTimeout(r, 5000))]);
     if (!$('fish').classList.contains('active')) return;
     if (aq.room) aq.room.dispose();
     aq.room = mod.createAquarium(box, { onSelect });

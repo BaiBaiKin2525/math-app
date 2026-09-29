@@ -20,6 +20,9 @@ const MODELS = [
   ['blender/fishgen.py', 'neon_1', ['neon', 1]],
   ['blender/fishgen.py', 'angel_1', ['angel', 1]],
   ['blender/fishgen.py', 'arowana_1', ['arowana', 1]],
+  // すいそうの なかの もの（blender/props.py）
+  ...['vallis', 'sword', 'cabomba', 'rocks', 'driftwood', 'shells', 'castle', 'ship', 'filter', 'heater', 'airpump', 'airstone']
+    .map((n) => ['blender/props.py', `prop_${n}`, [n]]),
 ];
 
 const only = process.argv[2];
@@ -30,7 +33,8 @@ for (const [script, name, args] of MODELS) {
   const out = `models/${name}.glb`;
   if (!existsSync(raw)) throw new Error(`${raw} が できなかった`);
   // meshopt：かたちを ちいさく、webp：がぞうを ちいさく（ふるい iPad の Safari も よめる）
-  execFileSync('npx', ['-y', '@gltf-transform/cli@4', 'optimize', raw, out, '--compress', 'meshopt', '--texture-compress', 'webp', '--texture-size', '512', '--simplify', 'false'],
+  // join・instance は しない（パーツの なまえで アプリが あつかいを かえるので、まとめられると こまる）
+  execFileSync('npx', ['-y', '@gltf-transform/cli@4', 'optimize', raw, out, '--compress', 'meshopt', '--texture-compress', 'webp', '--texture-size', '512', '--simplify', 'false', '--join', 'false', '--instance', 'false'],
     { stdio: ['ignore', 'ignore', 'inherit'], shell: true });
   unlinkSync(raw);
   console.log(`${out}  ${Math.round(statSync(out).size / 1024)}KB`);

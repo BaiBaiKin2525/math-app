@@ -407,15 +407,69 @@ const GLB = {};
 const modelListeners = new Set();
 let modelsLoading = null;
 
+let loaderPromise = null;
+function getLoader() {
+  if (!loaderPromise) {
+    loaderPromise = Promise.all([
+      import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm'),
+      import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js/+esm'),
+    ]).then(([{ GLTFLoader }, { MeshoptDecoder }]) => {
+      const loader = new GLTFLoader();
+      loader.setMeshoptDecoder(MeshoptDecoder);
+      return loader;
+    });
+  }
+  return loaderPromise;
+}
+
+// すいそうの なかの もの（blender/props.py で つくる）。よめない ときは プログラムで つくった かたち
+const PROP_NAMES = ['vallis', 'sword', 'cabomba', 'rocks', 'driftwood', 'shells', 'castle', 'ship', 'filter', 'heater', 'airpump', 'airstone'];
+const PROPS = {};
+const propListeners = new Set();
+let propsLoading = null;
+
+export function loadProps() {
+  if (!propsLoading) {
+    propsLoading = (async () => {
+      const loader = await getLoader();
+      await Promise.all(PROP_NAMES.map((n) => loader.loadAsync(`models/prop_${n}.glb`)
+        .then((g) => { PROPS[n] = bakeTransforms(g.scene); })
+        .catch((e) => console.warn(`prop_${n}.glb を よみこめませんでした`, e))));
+      propListeners.forEach((fn) => fn());
+    })().catch((e) => console.warn('すいそうの ものを よみこめませんでした', e));
+  }
+  return propsLoading;
+}
+
+// Blender の ものを つかう ための コピー。なまえで あつかいを かえる
+function propClone(name, U) {
+  const src = PROPS[name];
+  if (!src) return null;
+  const g = src.clone(true);
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = o.material.clone();
+    const m = o.material;
+    const n = o.name;
+    m.envMapIntensity = 0.6;
+    if (n.startsWith('plant')) {
+      m.side = THREE.DoubleSide;
+      if (m.transparent) Object.assign(m, { transparent: false, alphaTest: 0.3 }); // カボンバの こまかい はっぱ
+      swayMat(m, U);
+    } else if (n.startsWith('glass')) {
+      Object.assign(m, { transparent: true, opacity: n === 'glass' ? 0.25 : 0.55, depthWrite: false, roughness: 0.04, envMapIntensity: 1.8 });
+      o.renderOrder = 4;
+    } else if (n.startsWith('led')) {
+      m.emissiveIntensity = 2;
+    }
+  });
+  return g;
+}
+
 export function loadModels() {
   if (!modelsLoading) {
     modelsLoading = (async () => {
-      const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
-        import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm'),
-        import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js/+esm'),
-      ]);
-      const loader = new GLTFLoader();
-      loader.setMeshoptDecoder(MeshoptDecoder);
+      const loader = await getLoader();
       await Promise.all(Object.entries(MODEL_URLS).map(async ([k, urls]) => {
         const scenes = await Promise.all(urls.map((url) => loader.loadAsync(url).then((g) => bakeTransforms(g.scene)).catch((e) => {
           console.warn(`${url} を よみこめませんでした`, e);
@@ -726,7 +780,7 @@ function swayMat(mat, U) {
     sh.vertexShader = `uniform float uTime;\n${sh.vertexShader}`.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
-      vec3 ip = vec3(0.0);
+      vec3 ip = vec3(modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]) + vec3(position.x, 0.0, position.z) * 9.0;
       #ifdef USE_INSTANCING
         ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
       #endif
@@ -846,8 +900,35 @@ function taper(material, points, r0, r1, seg = 16, radial = 8) {
 }
 
 // おきもの（ねもとが じめん。k：すいそうの おおきさで かわる ばいりつ、depth：みずの ふかさ）
+// みずくさの むれ（Blender の みずくさ）
+function plantClump(depth, k, U, r) {
+  const v = propClone('vallis', U);
+  if (!v) return null;
+  const g = new THREE.Group();
+  v.scale.setScalar(depth * 0.85);
+  v.rotation.y = r() * 6;
+  g.add(v);
+  const sw = propClone('sword', U);
+  sw.scale.setScalar(depth * 0.42);
+  sw.position.set(-1.8 * k, 0, 2.2 * k);
+  sw.rotation.y = r() * 6;
+  const cb = propClone('cabomba', U);
+  cb.scale.setScalar(depth * 0.7);
+  cb.position.set(2.4 * k, 0, 0.6 * k);
+  cb.rotation.y = r() * 6;
+  g.add(sw, cb);
+  return g;
+}
+
+// Blender の おきもの（なまえ、おおきさ、かたむき）
+const DECOR_PROPS = {
+  ishi: ['rocks', 1], kai: ['shells', 1], ryuboku: ['driftwood', 0.85], shiro: ['castle', 0.85], fune: ['ship', 0.75],
+};
+
 const DECOR_3D = {
   kusa({ depth, k, U, r }) {
+    const clump = plantClump(depth, k, U, r);
+    if (clump) return clump;
     const g = new THREE.Group();
     g.add(vallis(16, depth * 0.85, 1.6 * k, U, r));
     const st = stemPlant(4, depth * 0.62, 1.4 * k, r);
@@ -1706,29 +1787,51 @@ function makeRegion(spec) {
 
 // ---------- きぐ ----------
 
+// きぐの おおきさ（すいそうが おおきいほど おおきい）
+const equipScale = (tank) => clamp(tank.size[2] / 30, 0.8, 1.6);
+
 function buildPump(tank, U) {
   const g = new THREE.Group();
   const at = tank.equipAt.pump;
   const [w, d, h] = tank.size;
   const fy = tank.floorY(at.x, at.z);
-  const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 1.4, 14), std(0x9a9da0, { roughness: 1 }));
-  stone.position.set(at.x, fy + 0.5, at.z);
+  const e = equipScale(tank);
+  const stoneP = propClone('airstone', U);
+  const pumpP = propClone('airpump', U);
+  const pumpAt = V(-w / 2 - 3, 0, -d / 2 + 3.5 * e);
+  let stone;
+  let box;
+  if (stoneP && pumpP) {
+    stone = stoneP;
+    stone.scale.setScalar(e * 0.75);
+    stone.position.set(at.x, fy - 0.3, at.z);
+    box = pumpP;
+    box.scale.setScalar(e * 0.7);
+    box.rotation.y = Math.PI / 2;
+    box.position.copy(pumpAt);
+  } else {
+    stone = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 1.4, 14), std(0x9a9da0, { roughness: 1 }));
+    stone.position.set(at.x, fy + 0.5, at.z);
+    box = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 2.6), std(0x3b6ea5, { roughness: 0.35 }));
+    box.position.set(pumpAt.x, 1.2, pumpAt.z);
+  }
+  // シリコンの エアチューブ（すこし すける）
   const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-    V(at.x, fy + 1.2, at.z), V(at.x - 0.6, h * 0.6, -d / 2 + 0.8), V(at.x - 0.6, h + 0.6, -d / 2 + 0.6),
-    V(at.x - 0.6, h + 1.2, -d / 2 - 1.2), V(-w / 2 - 2.5, 2.4, -d / 2 - 2.2),
-  ]), 40, 0.22, 6), std(0xd8e8e0, { transparent: true, opacity: 0.7, roughness: 0.2 }));
-  const box = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 2.6), std(0x3b6ea5, { roughness: 0.35 }));
-  box.position.set(-w / 2 - 2.5, 1.2, -d / 2 - 2.2);
+    V(at.x, fy + 1.4 * e, at.z), V(at.x - 0.6, h * 0.6, -d / 2 + 0.8), V(at.x - 0.6, h + 0.6, -d / 2 + 0.6),
+    V(at.x - 0.6, h + 1.4, -d / 2 - 1.2), V(pumpAt.x + 0.8, 2.2, pumpAt.z + 1.6 * e), V(pumpAt.x, 1.0 * e, pumpAt.z + 1.6 * e),
+  ]), 60, 0.22, 8), new THREE.MeshPhysicalMaterial({ color: 0xdcece6, transparent: true, opacity: 0.6, roughness: 0.15, clearcoat: 0.6, envMapIntensity: 1.2 }));
   g.add(stone, tube, box);
-  const bub = bubbleSystem(28, V(at.x, fy + 1.3, at.z), tank.waterTop - 0.1, 0.5, 0.22);
+  const bub = bubbleSystem(34, V(at.x, fy + 1.6 * e, at.z), tank.waterTop - 0.1, 0.5, 0.22);
   g.add(bub.mesh);
   return { group: g, update: bub.update };
 }
 
 function buildFilter(tank) {
-  const g = new THREE.Group();
   const at = tank.equipAt.filter;
   const [, d, h] = tank.size;
+  const model = propClone('filter');
+  if (model) return buildFilterModel(tank, model);
+  const g = new THREE.Group();
   const body = std(0x30343a, { roughness: 0.35, metalness: 0.2 });
   const box = new THREE.Mesh(new THREE.BoxGeometry(8, 12, 5), body);
   box.position.set(at.x, h - 4.5, -d / 2 - 2.8);
@@ -1757,7 +1860,70 @@ function buildFilter(tank) {
   return { group: g, update: (dt, t) => { bub.update(dt, t); fallTex.offset.y = -t * 1.5; } };
 }
 
+// Blender の ろかフィルター：うしろの ガラスに かける。すいこみ パイプは そこの ちかくまで のばす
+function buildFilterModel(tank, model) {
+  const g = new THREE.Group();
+  const at = tank.equipAt.filter;
+  const [, d, h] = tank.size;
+  const e = equipScale(tank);
+  model.scale.setScalar(e);
+  model.position.set(at.x, h, -d / 2);
+  const len = (h - tank.floorY(at.x - 3 * e, -d / 2 + 1.5 * e) - 5 * e) / e;
+  model.traverse((o) => {
+    if (o.name.startsWith('intake')) o.scale.y = len;
+    if (o.name.startsWith('strainer')) o.position.y = -len;
+  });
+  g.add(model);
+  // でぐちから おちる みず
+  const fallTex = textures().waterN.clone();
+  fallTex.needsUpdate = true;
+  fallTex.repeat.set(0.5, 2);
+  const lipY = h + 0.3 * e;
+  const fallH = Math.max(0.4, lipY - tank.waterTop);
+  const fall = new THREE.Mesh(new THREE.PlaneGeometry(5.4 * e, fallH + 0.3), new THREE.MeshStandardMaterial({
+    color: 0xe8f7ff, transparent: true, opacity: 0.5, roughness: 0.05, normalMap: fallTex, envMapIntensity: 2, depthWrite: false, side: THREE.DoubleSide,
+  }));
+  fall.position.set(at.x + 0.8 * e, tank.waterTop + fallH / 2, -d / 2 + 3.0 * e);
+  fall.renderOrder = 4;
+  g.add(fall);
+  const bub = bubbleSystem(16, V(at.x + 0.8 * e, tank.waterTop - 3, -d / 2 + 3.2 * e), tank.waterTop - 0.1, 1.4 * e, 0.16);
+  g.add(bub.mesh);
+  return { group: g, update: (dt, t) => { bub.update(dt, t); fallTex.offset.y = -t * 1.5; } };
+}
+
+// Blender の ヒーター：うしろの ガラスに きゅうばんで ななめに つける
+function buildHeaterModel(tank, model) {
+  const g = new THREE.Group();
+  const T = textures();
+  const at = tank.equipAt.heater;
+  const len = Math.min(tank.waterTop * 0.65, 24);
+  const k = len / 20;
+  const pivot = new THREE.Group();
+  pivot.position.set(at.x, tank.floorY(at.x, at.z) + 1.5, at.z);
+  pivot.rotation.z = -0.35;
+  model.scale.setScalar(k);
+  pivot.add(model);
+  let coil = null;
+  model.traverse((o) => {
+    if (o.name.startsWith('coil')) coil = o.material;
+  });
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: T.glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  glow.scale.set(2.2, 2.2, 1);
+  glow.position.set(0, 21.8 * k, 1.1 * k);
+  pivot.add(glow);
+  g.add(pivot);
+  return {
+    group: g,
+    update: (dt, t) => {
+      glow.material.opacity = 0.55 + 0.45 * Math.sin(t * 2);
+      if (coil) coil.emissiveIntensity = 0.35 + 0.25 * Math.sin(t * 2);
+    },
+  };
+}
+
 function buildHeater(tank) {
+  const model = propClone('heater');
+  if (model) return buildHeaterModel(tank, model);
   const g = new THREE.Group();
   const T = textures();
   const at = tank.equipAt.heater;
@@ -1933,6 +2099,16 @@ export function createAquarium(container, { onSelect }) {
   const flakeGeo = new THREE.BoxGeometry(0.4, 0.05, 0.32);
   const flakeMats = [std(0xd8702a, { roughness: 0.8 }), std(0xa8502a, { roughness: 0.8 }), std(0xe8b048, { roughness: 0.8 })];
 
+  // Blender の ものが とどいたら すいそうを つくりなおす（さかなは そのまま）
+  let lastFish = [];
+  const onProps = () => {
+    if (!spec) return;
+    setTank(spec);
+    setFish(lastFish);
+  };
+  propListeners.add(onProps);
+  loadProps();
+
   // spec：{ shape: 'basin'|'bowl'|'box', dims, level, slots, equip: { pump, filter, heater }, decor: [{ type, slot }], plants }
   function setTank(s) {
     for (const id of [...actors.keys()]) removeActor(id);
@@ -1950,7 +2126,15 @@ export function createAquarium(container, { onSelect }) {
     stems = [];
     equip = [];
     // きんぎょばちには はじめから みずくさ
-    if (s.plants) {
+    const bowlPlants = s.plants && propClone('cabomba', envU);
+    if (bowlPlants) {
+      bowlPlants.scale.setScalar(depth * 0.8);
+      bowlPlants.position.set(-tank.size[0] * 0.12, tank.floorY(0, 0) - 0.4, -tank.size[1] * 0.12);
+      const v = propClone('vallis', envU);
+      v.scale.setScalar(depth * 0.7);
+      v.position.set(tank.size[0] * 0.14, tank.floorY(0, 0) - 0.3, -tank.size[1] * 0.18);
+      tank.group.add(bowlPlants, v);
+    } else if (s.plants) {
       const p = stemPlant(5, depth * 0.8, 1.6, r);
       p.position.set(-tank.size[0] * 0.12, tank.floorY(0, 0) - 0.4, -tank.size[1] * 0.12);
       tank.group.add(p);
@@ -1963,7 +2147,22 @@ export function createAquarium(container, { onSelect }) {
       const build = DECOR_3D[d.type];
       if (!build) continue;
       const k = tank.scale;
-      const obj = build({ depth, k, U: envU, r: rng(77 + d.slot * 13) });
+      const dp = DECOR_PROPS[d.type];
+      let obj = dp && propClone(dp[0], envU);
+      if (obj) {
+        obj.scale.setScalar(k * dp[1]);
+        // ながい もの（りゅうぼく）が まえから よく みえる ように、むきは すこしだけ かえる
+        obj.rotation.y = ((d.slot * 1.7) % 0.8) - 0.4;
+        if (d.type === 'fune') {
+          obj.rotation.set(0, 0.35, 0.22);
+          obj.position.y = 0.4 * k;
+          const wrap = new THREE.Group();
+          wrap.add(obj);
+          obj = wrap;
+        }
+      } else {
+        obj = build({ depth, k, U: envU, r: rng(77 + d.slot * 13) });
+      }
       const p = tank.slotPos(d.slot, s.slots);
       obj.position.set(p.x, s.shape === 'box' ? tank.floorY(p.x, p.z) - 0.3 : p.y, p.z);
       tank.group.add(obj);
@@ -2055,6 +2254,7 @@ export function createAquarium(container, { onSelect }) {
 
   // list：[{ id, species, lengthCm, seed, weak }]。かわった さかなだけ つくりなおす
   function setFish(list) {
+    lastFish = list;
     const ids = new Set(list.map((p) => p.id));
     for (const id of [...actors.keys()]) if (!ids.has(id)) removeActor(id);
     for (const p of list) {
@@ -2323,6 +2523,7 @@ export function createAquarium(container, { onSelect }) {
   loop();
 
   function dispose() {
+    propListeners.delete(onProps);
     modelListeners.delete(onModel);
     cancelAnimationFrame(raf);
     ro.disconnect();
