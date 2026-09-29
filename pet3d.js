@@ -587,7 +587,8 @@ function buildPupa(species) {
 
 // ---------- Blender で つくった むし（models/bug_*.glb） ----------
 // よみこめた しゅるいは そちらを つかう。まだ・よめない ときは プログラムで つくった むし
-const BUG_NAMES = ['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa'];
+// larva・pupa は どの こうちゅうの ようちゅう・さなぎにも つかう
+const BUG_NAMES = ['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa', 'ant', 'dango', 'larva', 'pupa'];
 const BUGS = {};
 // ケースの なかの もの（blender/props.py）：まるた・おちば・とまりぎ
 const CASE_PROPS = ['log', 'leaves', 'perch'];
@@ -682,6 +683,8 @@ function buildBugModel(species, sizeRatio) {
   const antennae = [];
   const jaws = [];
   let head = null;
+  let body = null;
+  let ball = null;
   const k = 0.55 + 0.7 * sizeRatio; // おおきい こほど つの・あごが ながい
   g.traverse((o) => {
     const leg = o.name.match(/^leg_(\d)_([LR])$/);
@@ -699,6 +702,11 @@ function buildBugModel(species, sizeRatio) {
       o.scale.setScalar(k);
     } else if (o.name === 'head') {
       head = o;
+    } else if (o.name === 'body') {
+      body = o;             // ダンゴムシ：あるく ときの からだ
+    } else if (o.name === 'ball') {
+      ball = o;             // ダンゴムシ：まるまった ところ
+      o.visible = false;
     }
   });
   const phase = Math.random() * 10;
@@ -711,15 +719,43 @@ function buildBugModel(species, sizeRatio) {
     for (const j of jaws) j.pivot.rotation.y = j.s * open;
     if (head) head.rotation.x = Math.sin(t * 0.6 + phase) * 0.05;
   };
-  return { group: g, legs, anim };
+  return { group: g, legs, body, ball, anim };
+}
+
+// Blender の ようちゅう：body を すこし ふくらませて いきを する
+function buildLarvaModel() {
+  const g = BUGS.larva.clone(true);
+  const body = g.getObjectByName('body') || g;
+  const anim = (t) => {
+    body.scale.y = 1 + Math.sin(t * 2) * 0.03;
+    body.scale.x = 1 - Math.sin(t * 2) * 0.015;
+  };
+  return { group: g, legs: [], anim };
+}
+
+// Blender の さなぎ：カブトは つの、クワガタは あごを だす
+function buildPupaModel(species) {
+  const g = BUGS.pupa.clone(true);
+  const horn = g.getObjectByName('pupa_horn');
+  const jaws = g.getObjectByName('pupa_jaws');
+  if (horn) horn.visible = species === 'kabuto';
+  if (jaws) jaws.visible = species !== 'kabuto' && !!(BEETLE_STYLE[species] && BEETLE_STYLE[species].jaw);
+  return { group: g, legs: [] };
+}
+
+// Blender の モデルが よみこめて いるか
+function hasModel(p) {
+  if (p.stage === 'larva') return !!BUGS.larva;
+  if (p.stage === 'pupa') return !!BUGS.pupa;
+  return !!BUGS[p.species];
 }
 
 function buildModel(p) {
-  if (p.stage === 'larva') return buildLarva();
-  if (p.stage === 'pupa') return buildPupa(p.species);
+  if (p.stage === 'larva') return BUGS.larva ? buildLarvaModel() : buildLarva();
+  if (p.stage === 'pupa') return BUGS.pupa ? buildPupaModel(p.species) : buildPupa(p.species);
+  if (BUGS[p.species]) return buildBugModel(p.species, p.sizeRatio ?? 0.5);
   if (p.species === 'ant') return buildAnt();
   if (p.species === 'dango') return buildDango();
-  if (BUGS[p.species]) return buildBugModel(p.species, p.sizeRatio ?? 0.5);
   return buildBeetle(p.species, p.sizeRatio ?? 0.5);
 }
 
@@ -1300,17 +1336,15 @@ export function createInsectRoom(container, { onSelect }) {
   const onBugs = () => {
     if (caseFallback && lastCaseArgs) setCase(...lastCaseArgs);
     for (const a of [...actors.values()]) {
-      if (a.pet.stage !== 'adult' || !BUGS[a.pet.species]) continue;
+      if (!hasModel(a.pet)) continue;
       const pos = a.g.position.clone();
       const rotY = a.g.rotation.y;
       const p = a.pet;
       removeActor(p.id);
       addActor(p);
       const b = actors.get(p.id);
-      if (b.walker) {
-        b.g.position.copy(pos);
-        b.g.rotation.y = rotY;
-      }
+      b.g.position.copy(pos);
+      if (b.walker) b.g.rotation.y = rotY;
     }
     select(selected);
   };

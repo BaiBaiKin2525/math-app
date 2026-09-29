@@ -24,7 +24,7 @@ const MODELS = [
   ...['vallis', 'sword', 'cabomba', 'rocks', 'driftwood', 'shells', 'castle', 'ship', 'filter', 'heater', 'airpump', 'airstone', 'log', 'leaves', 'perch']
     .map((n) => ['blender/props.py', `prop_${n}`, [n]]),
   // むし（blender/insects.py）
-  ...['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa'].map((n) => ['blender/insects.py', `bug_${n}`, [n]]),
+  ...['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa', 'ant', 'dango', 'larva', 'pupa'].map((n) => ['blender/insects.py', `bug_${n}`, [n]]),
 ];
 
 const only = process.argv[2];
