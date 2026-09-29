@@ -129,7 +129,7 @@ function renderWho() {
     const card = document.createElement('button');
     card.className = 'who-card';
     card.innerHTML = `<span class="who-icon">${p.icon}</span><span class="who-name">${p.name}</span>
-      <span class="who-points">⭐ ${todayStatus(p.id).points}</span>`;
+      <span class="who-points">⭐ ${pointsText(todayStatus(p.id).points)}</span>`;
     card.addEventListener('click', () => {
       setCurrentProfile(p.id);
       renderHome();
@@ -161,7 +161,7 @@ function renderHomeBar() {
       ${s.day.goal ? '<b>たっせい！</b>' : `あと ${goal - s.day.sets} セット`}
       ${s.streak >= 2 ? `<span class="streak">🔥 ${s.streak}にち れんぞく</span>` : ''}
     </div>
-    <div class="points-chip">⭐ <b>${s.points}</b> pt</div>
+    <div class="points-chip">⭐ <b>${pointsText(s.points)}</b> pt${isAdultMode() ? ' <small class="adult-badge">大人モード</small>' : ''}</div>
     <div class="room-btns">
       <button id="pets-btn" class="pets-btn">🐜 むしの おへや</button>
       <button id="fish-btn" class="pets-btn fish-btn">🐟 さかなの おへや</button>

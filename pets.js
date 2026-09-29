@@ -404,7 +404,7 @@ function switchCase(id) {
 }
 
 function renderPets() {
-  $('pets-points').innerHTML = `⭐ <b>${loadWallet(currentProfile().id).points}</b> pt`;
+  $('pets-points').innerHTML = `⭐ <b>${pointsText(loadWallet(currentProfile().id).points)}</b> pt`;
   const tabs = $('case-tabs');
   tabs.innerHTML = '';
   for (const c of pets.data.cases) {
@@ -545,8 +545,8 @@ function notice(html) {
 
 function openShop(tab) {
   if (tab) pets.shopTab = tab;
-  const points = loadWallet(currentProfile().id).points;
-  $('shop-points').innerHTML = `⭐ <b>${points}</b> pt`;
+  const points = usablePoints(currentProfile().id);
+  $('shop-points').innerHTML = `⭐ <b>${pointsText(points)}</b> pt`;
   document.querySelectorAll('.shop-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === pets.shopTab));
   const maxCase = Math.max(...pets.data.cases.map((c) => CASES[c.type].size));
   const rows = [];

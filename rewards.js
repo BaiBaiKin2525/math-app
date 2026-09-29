@@ -189,10 +189,39 @@ function awardSet({ correct, total, full, level, wrong = 0 }) {
   return { items, got, points: w.points, capped: study < wanted, day };
 }
 
+// ---------- 大人モード ----------
+// パスワードを入れると、この端末では ポイントを減らさずに お店で買える（ためた ポイントは そのまま）。
+// パスワードは そのまま書かずに SHA-256 の ハッシュで くらべる
+const ADULT_KEY = 'mathapp.v1.adult';
+const ADULT_HASH = 'c857d09db23e6822e3600bc06ad8d58f92ed62bc8efd81c753f77048662cb97d';
+
+function isAdultMode() {
+  return readJSON(ADULT_KEY, false) === true;
+}
+
+// 正しければ 大人モードに して true。この開き方で ハッシュが 使えない ときは null
+async function tryAdultPassword(pw) {
+  if (!(window.crypto && crypto.subtle)) return null;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw.trim()));
+  const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  if (hex !== ADULT_HASH) return false;
+  writeJSON(ADULT_KEY, true);
+  return true;
+}
+
+function endAdultMode() {
+  writeJSON(ADULT_KEY, false);
+}
+
+// 買える ポイント（大人モードは むげん）と、画面に出す かず
+const usablePoints = (id) => (isAdultMode() ? Infinity : loadWallet(id).points);
+const pointsText = (n) => (isAdultMode() ? '∞' : n);
+
 // ペットの おみせ など から つかう。たりなければ false
 function spendPoints(amount, reason) {
   const profile = currentProfile();
   if (!profile || amount <= 0) return false;
+  if (isAdultMode()) return true;
   const w = loadWallet(profile.id);
   if (w.points < amount) return false;
   w.points -= amount;

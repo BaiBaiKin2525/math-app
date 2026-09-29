@@ -60,6 +60,12 @@ const fmtDate = (iso) => {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+// だれが やる？・ホームの ポイント表示を 大人モードに あわせて かきなおす
+function renderHomeIfShown() {
+  if ($('home').classList.contains('active')) renderHome();
+  else if ($('who').classList.contains('active')) renderWho();
+}
+
 async function openSettings() {
   const works = storageWorks();
   let persisted = '非対応';
@@ -113,7 +119,36 @@ async function openSettings() {
       </div>
       <textarea id="restore-in" class="set-code" placeholder="ここにコードを貼りつけて「コードから もどす」"></textarea>
       <button id="restore-code" class="small-btn">コードから もどす</button>
+    </section>
+    <section class="set-block">
+      <h3>大人モード（ポイント無制限）</h3>
+      <p class="set-note">この端末だけ、むしや さかなの お店で ポイントを減らさずに買えます。ためたポイントは そのまま残り、大人モードを やめると元にもどります。</p>
+      ${isAdultMode()
+        ? '<p class="set-adult-on">✅ いま 大人モードです</p><button id="adult-off" class="big-btn gray">大人モードを やめる</button>'
+        : `<div class="set-buttons"><input id="adult-pw" class="set-pw" type="password" autocomplete="off" placeholder="パスワード">
+           <button id="adult-on" class="big-btn orange">大人モードに する</button></div><p id="adult-msg" class="set-note"></p>`}
     </section>`;
+
+  if ($('adult-on')) {
+    const tryIt = async () => {
+      const ok = await tryAdultPassword($('adult-pw').value);
+      if (ok === null) $('adult-msg').textContent = 'この開き方では使えません（https か localhost で開いてください）';
+      else if (!ok) $('adult-msg').textContent = 'パスワードが ちがいます';
+      else {
+        openSettings();
+        renderHomeIfShown();
+      }
+    };
+    $('adult-on').addEventListener('click', tryIt);
+    $('adult-pw').addEventListener('keydown', (e) => e.key === 'Enter' && tryIt());
+  }
+  if ($('adult-off')) {
+    $('adult-off').addEventListener('click', () => {
+      endAdultMode();
+      openSettings();
+      renderHomeIfShown();
+    });
+  }
 
   $('backup-file').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(collectData())], { type: 'application/json' });

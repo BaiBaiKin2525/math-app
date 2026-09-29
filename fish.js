@@ -408,7 +408,7 @@ function switchTank(id) {
 }
 
 function renderFish() {
-  $('fish-points').innerHTML = `⭐ <b>${loadWallet(currentProfile().id).points}</b> pt`;
+  $('fish-points').innerHTML = `⭐ <b>${pointsText(loadWallet(currentProfile().id).points)}</b> pt`;
   const tabs = $('tank-tabs');
   tabs.innerHTML = '';
   for (const t of aq.data.tanks) {
@@ -570,8 +570,8 @@ function changeWater() {
 
 function openFishShop(tab) {
   if (tab) aq.shopTab = tab;
-  const points = loadWallet(currentProfile().id).points;
-  $('fshop-points').innerHTML = `⭐ <b>${points}</b> pt`;
+  const points = usablePoints(currentProfile().id);
+  $('fshop-points').innerHTML = `⭐ <b>${pointsText(points)}</b> pt`;
   document.querySelectorAll('.fshop-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === aq.shopTab));
   const t = currentTank();
   const T = TANKS[t.type];

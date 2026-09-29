@@ -1154,3 +1154,6 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 .flat-fish.selected { filter: drop-shadow(0 0 6px #ff8a3d); }
 .flat-fish.weak { opacity: .6; }
 .water-meter.crowd .wm-bar i { background: linear-gradient(90deg, #a6d98f, #4aa860); }
+.adult-badge { font-size: 12px; background: #8a6ad0; color: #fff; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+.set-pw { font-size: 18px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; min-width: 0; flex: 1; }
+.set-adult-on { font-weight: bold; color: #2c7a45; }
