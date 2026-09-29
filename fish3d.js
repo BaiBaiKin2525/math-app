@@ -308,6 +308,22 @@ const LOOK = {
     amp: 0.045, swim: { speed: 0.35, depth: [0.62, 0.96], cruise: true },
   },
 };
+// きんぎょの なかま（モデルが よめない ときの かたちと、およぎかた）
+LOOK.pinpon = {
+  ...LOOK.ryukin, h: 0.22, wr: 0.72, peak: 0.52, k: 0.5, flat: -0.02, zT: -0.2, back: 0xf07a20, belly: 0xfbe6d0,
+  fin: { ...LOOK.ryukin.fin, dorsal: { t: [0.34, 0.62], h: 0.1, sweep: 0.4 }, tail: { len: 0.27, span: 0.12, kind: 'fork', fork: 0.35, split: 0.08 } },
+  amp: 0.035, swim: { speed: 0.45, depth: [0.2, 0.85], hover: true },
+};
+LOOK.demekin = {
+  ...LOOK.ryukin, back: 0x141218, belly: 0x2a2630, patch: null, eye: 0.07, iris: 0x2a2630, rough: 0.6, metal: 0,
+  fin: { ...LOOK.ryukin.fin, color: 0x16141a, tip: 0x2a2630, opacity: 0.85 },
+  swim: { speed: 0.5, depth: [0.2, 0.85], hover: true },
+};
+LOOK.tancho = {
+  ...LOOK.ryukin, h: 0.16, wr: 0.72, flat: 0.05, zT: -0.2, back: 0xf4f2ee, belly: 0xf8f6f2, patch: null,
+  fin: { ...LOOK.ryukin.fin, color: 0xf4f2ee, tip: 0xffffff, opacity: 0.55, dorsal: null, tail: { len: 0.27, span: 0.13, kind: 'fork', fork: 0.3, split: 0.14 } },
+  amp: 0.04, swim: { speed: 0.4, depth: [0.1, 0.8], hover: true },
+};
 LOOK.himedaka = {
   ...LOOK.medaka, back: 0xe98d34, belly: 0xfbe6c4, line: 0xc06a20, iris: 0xd8e4ea,
   fin: { ...LOOK.medaka.fin, color: 0xf0ae68, tip: 0xfbe2c4 },
@@ -372,7 +388,16 @@ function bend(mat, U, fin) {
 
 // ---------- Blender で つくった モデル（models/*.glb） ----------
 // よみこめた しゅるいは そちらを つかう。よみこむ まえ・よみこめない ときは プログラムで つくった さかな
-const MODEL_URLS = { medaka: 'models/medaka.glb', himedaka: 'models/himedaka.glb' };
+// さらさ もようの きんぎょは もようの ちがう モデルを いくつか よういして、1ぴきずつ えらぶ
+const MODEL_URLS = {
+  medaka: ['models/medaka.glb'],
+  himedaka: ['models/himedaka.glb'],
+  kingyo: ['models/wakin_1.glb', 'models/wakin_2.glb', 'models/wakin_3.glb'],
+  ryukin: ['models/ryukin_1.glb', 'models/ryukin_2.glb'],
+  pinpon: ['models/pinpon_1.glb', 'models/pinpon_2.glb'],
+  demekin: ['models/demekin_1.glb'],
+  tancho: ['models/tancho_1.glb'],
+};
 const GLB = {};
 const modelListeners = new Set();
 let modelsLoading = null;
@@ -386,13 +411,15 @@ export function loadModels() {
       ]);
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
-      await Promise.all(Object.entries(MODEL_URLS).map(async ([k, url]) => {
-        try {
-          GLB[k] = bakeTransforms((await loader.loadAsync(url)).scene);
-          modelListeners.forEach((fn) => fn(k));
-        } catch (e) {
+      await Promise.all(Object.entries(MODEL_URLS).map(async ([k, urls]) => {
+        const scenes = await Promise.all(urls.map((url) => loader.loadAsync(url).then((g) => bakeTransforms(g.scene)).catch((e) => {
           console.warn(`${url} を よみこめませんでした`, e);
-        }
+          return null;
+        })));
+        const ok = scenes.filter(Boolean);
+        if (!ok.length) return;
+        GLB[k] = ok;
+        modelListeners.forEach((fn) => fn(k));
       }));
     })().catch((e) => console.warn('モデルを よみこめませんでした', e));
   }
@@ -445,7 +472,7 @@ function buildModelFish(species, seed) {
   const L = LOOK[species];
   const r = rng(seed);
   const U = { uPhase: { value: r() * 6 }, uAmp: { value: L.amp }, uTurn: { value: 0 }, uTime: { value: 0 }, uFlutter: { value: L.flutter ?? 0.018 } };
-  const g = GLB[species].clone(true);
+  const g = GLB[species][Math.floor(r() * 997) % GLB[species].length].clone(true);
   let body = null;
   // 1ぴきずつ すこし いろを かえる
   const tint = new THREE.Color().setHSL(0, 0, 0.9 + r() * 0.2);
@@ -458,7 +485,12 @@ function buildModelFish(species, seed) {
       o.renderOrder = 2;
     } else if (o.name.startsWith('body')) {
       o.material.color.multiply(tint);
-      o.material.envMapIntensity = 0.9;
+      // へやの うつりこみで しろっぽく ならない ように、つやは ひかえめ。
+      // うろこの でこぼこ（ほうせん マップ）は はなさきで すじが でるので つかわない（もようで かげを つけてある）
+      o.material.envMapIntensity = 0.85;
+      o.material.roughness = Math.max(o.material.roughness, 0.5);
+      o.material.metalness = 0;
+      o.material.normalMap = null;
       bend(o.material, U, false);
       body = o;
     } else if (o.name.startsWith('pupil')) {

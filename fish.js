@@ -27,15 +27,15 @@ const TANKS = {
   senmenki: { name: 'せんめんき', icon: '🪣', price: 0, level: 0, liters: 6, slots: 1, shape: 'basin', dims: [32, 32, 11], dose: 1,
     cap: { medaka: 4, himedaka: 4 }, desc: 'メダカ だけ' },
   bachi: { name: 'きんぎょばち', icon: '🫙', price: 250, level: 1, liters: 7, slots: 1, shape: 'bowl', dims: [28, 28, 24], dose: 1, plants: true,
-    cap: { medaka: 5, himedaka: 5, kingyo: 1 }, desc: 'みずくさ いり' },
+    cap: { medaka: 5, himedaka: 5, kingyo: 1, pinpon: 1, demekin: 1 }, desc: 'みずくさ いり' },
   S: { name: '30cm すいそう', icon: '🐠', price: 500, level: 2, liters: 12, slots: 2, shape: 'box', dims: [30, 18, 24], dose: 1,
-    cap: { medaka: 10, himedaka: 10, kingyo: 2, ryukin: 2 }, desc: 'エアポンプと ろかフィルターが ひつよう' },
+    cap: { medaka: 10, himedaka: 10, kingyo: 2, ryukin: 2, pinpon: 2, demekin: 2, tancho: 2 }, desc: 'エアポンプと ろかフィルターが ひつよう' },
   M: { name: '60cm すいそう', icon: '🐠', price: 1200, level: 3, liters: 61, slots: 3, shape: 'box', dims: [60, 30, 36], dose: 2, mix: true,
-    cap: { medaka: 30, himedaka: 30, kingyo: 6, ryukin: 6, betta: 1, guppy: 50 }, desc: 'ちがう さかなと いっしょに かえる' },
+    cap: { medaka: 30, himedaka: 30, kingyo: 6, ryukin: 6, pinpon: 6, demekin: 6, tancho: 6, betta: 1, guppy: 50 }, desc: 'ちがう さかなと いっしょに かえる' },
   L: { name: '90cm すいそう', icon: '🐠', price: 2000, level: 4, liters: 166, slots: 4, shape: 'box', dims: [90, 45, 45], dose: 4, mix: true,
-    cap: { medaka: 80, himedaka: 80, kingyo: 8, ryukin: 8, betta: 1, guppy: 100, neon: 100, angel: 8 }, desc: 'ヒーターを つけると ねったいぎょも かえる' },
+    cap: { medaka: 80, himedaka: 80, kingyo: 8, ryukin: 8, pinpon: 8, demekin: 8, tancho: 8, betta: 1, guppy: 100, neon: 100, angel: 8 }, desc: 'ヒーターを つけると ねったいぎょも かえる' },
   XL: { name: '180cm すいそう', icon: '🐠', price: 4000, level: 5, liters: 609, slots: 6, shape: 'box', dims: [180, 60, 60], dose: 8, mix: true,
-    cap: { medaka: 300, himedaka: 300, kingyo: 30, ryukin: 30, betta: 1, guppy: 300, neon: 300, angel: 30, arowana: 1 }, desc: 'アロワナが かえる' },
+    cap: { medaka: 300, himedaka: 300, kingyo: 30, ryukin: 30, pinpon: 30, demekin: 30, tancho: 30, betta: 1, guppy: 300, neon: 300, angel: 30, arowana: 1 }, desc: 'アロワナが かえる' },
 };
 // タブレットで なめらかに うごく ように、1つの すいそうに いれられるのは ここまで
 const APP_MAX_FISH = 50;
@@ -66,9 +66,9 @@ const FISH = {
     trivia: 'メダカは たまごを うみます。10にち くらいで あかちゃんが うまれます。',
   },
   kingyo: {
-    name: 'きんぎょ', icon: '🐠', price: 80, level: 1, size: [40, 150], grow: 30, life: 3650, kind: 'kingyo',
+    name: 'わきん', icon: '🐠', price: 80, level: 1, size: [40, 150], grow: 30, life: 3650, kind: 'kingyo',
     lives: 'ひとが そだてた さかな（もとは フナ）', eats: 'なんでも たべる',
-    text: 'フナを もとに、むかしの ちゅうごくで うまれた さかな。あかや しろの もようが 1ぴきずつ ちがいます。',
+    text: 'いちばん むかしから いる きんぎょ。フナに にた ほそながい からだで、すいすい およぎます。あかと しろの「さらさ」もようは 1ぴきずつ ちがいます。',
     trivia: 'じょうずに そだてると 10ねん いじょう いきる ことも あります。',
   },
   ryukin: {
@@ -76,6 +76,24 @@ const FISH = {
     lives: 'ひとが そだてた きんぎょ', eats: 'なんでも たべる',
     text: 'まるい からだと、ひらひらの ながい おびれが うつくしい きんぎょの なかま。',
     trivia: 'およぐのが ゆっくり。はやい さかなと いっしょだと えさを とられて しまう ことも あります。',
+  },
+  pinpon: {
+    name: 'ピンポンパール', icon: '🐡', price: 180, level: 1, size: [30, 80], grow: 30, life: 1825, kind: 'kingyo',
+    lives: 'ひとが そだてた きんぎょ', eats: 'なんでも たべる',
+    text: 'ピンポンだまの ような まんまるの からだの きんぎょ。うろこ 1まい 1まいが しんじゅの ように もりあがって います（ちんじゅりん）。',
+    trivia: 'からだが まるいので およぐのは ゆっくり。ころころ ういて いる ように みえます。',
+  },
+  demekin: {
+    name: 'でめきん', icon: '🐟', price: 150, level: 1, size: [40, 120], grow: 30, life: 3650, kind: 'kingyo',
+    lives: 'ひとが そだてた きんぎょ', eats: 'なんでも たべる',
+    text: 'めが よこに とびだした きんぎょ。くろい でめきんは ビロードの ような つやの ない からだです。',
+    trivia: 'めが とびだして いるので、とがった いしや かざりに ぶつけない ように きを つけて かいます。',
+  },
+  tancho: {
+    name: 'たんちょう らんちゅう', icon: '🐠', price: 400, level: 2, size: [40, 150], grow: 30, life: 3650, kind: 'kingyo',
+    lives: 'ひとが そだてた きんぎょ', eats: 'なんでも たべる',
+    text: 'しろい からだに、あたまの うえだけ あかい「にくりゅう」が のった らんちゅう。せびれが ありません。',
+    trivia: 'あかい あたまが つるの タンチョウに にて いるので この なまえ。らんちゅうは「きんぎょの おうさま」と よばれます。',
   },
   betta: {
     name: 'ベタ', icon: '🐠', price: 250, level: 3, single: true, size: [40, 65], grow: 15, life: 730, kind: 'betta',
@@ -487,8 +505,10 @@ function fishChips(list) {
 }
 
 // すいそうごとの めやす（その さかな だけ なら なんびき）
-const capText = (T) => Object.entries(T.cap).filter(([k]) => k !== 'himedaka')
-  .map(([k, n]) => `${FISH[k].name} ${n > APP_MAX_FISH ? `${n}ぴき（アプリでは ${APP_MAX_FISH}ぴき まで）` : `${n}ぴき`}`).join('・');
+//   ヒメダカは メダカと、きんぎょの なかまは わきんと おなじ かずなので まとめる
+const CAP_SAME = new Set(['himedaka', 'ryukin', 'pinpon', 'demekin', 'tancho']);
+const capText = (T) => Object.entries(T.cap).filter(([k]) => !CAP_SAME.has(k))
+  .map(([k, n]) => `${k === 'kingyo' ? 'きんぎょ' : FISH[k].name} ${n > APP_MAX_FISH ? `${n}ぴき（アプリでは ${APP_MAX_FISH}ぴき まで）` : `${n}ぴき`}`).join('・');
 
 // すいそうの さかな ぜんぶに えさ
 function feedTank() {

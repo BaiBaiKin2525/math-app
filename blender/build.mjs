@@ -1,18 +1,26 @@
 // Blender で モデルを つくって、gltf-transform で かるく する（models/*.glb）。
-//   つかいかた（math-app フォルダで）: node blender/build.mjs
+//   つかいかた（math-app フォルダで）: node blender/build.mjs         … ぜんぶ
+//                                      node blender/build.mjs wakin   … なまえに wakin が はいる ものだけ
 //   Blender の ばしょが ちがう ときは BLENDER=... を つける
 import { execFileSync } from 'node:child_process';
 import { existsSync, statSync, unlinkSync } from 'node:fs';
 
 const BLENDER = process.env.BLENDER || 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe';
-// [スクリプト, しゅるい]
+// [スクリプト, でてくる ファイルの なまえ, スクリプトに わたす もの]
 const MODELS = [
-  ['blender/medaka.py', 'medaka'],
-  ['blender/medaka.py', 'himedaka'],
+  ['blender/medaka.py', 'medaka', ['medaka']],
+  ['blender/medaka.py', 'himedaka', ['himedaka']],
+  ...[1, 2, 3].map((n) => ['blender/goldfish.py', `wakin_${n}`, ['wakin', n]]),
+  ...[1, 2].map((n) => ['blender/goldfish.py', `ryukin_${n}`, ['ryukin', n]]),
+  ...[1, 2].map((n) => ['blender/goldfish.py', `pinpon_${n}`, ['pinpon', n]]),
+  ['blender/goldfish.py', 'demekin_1', ['demekin', 1]],
+  ['blender/goldfish.py', 'tancho_1', ['tancho', 1]],
 ];
 
-for (const [script, name] of MODELS) {
-  execFileSync(BLENDER, ['--background', '--python', script, '--', name], { stdio: ['ignore', 'ignore', 'inherit'] });
+const only = process.argv[2];
+for (const [script, name, args] of MODELS) {
+  if (only && !name.includes(only)) continue;
+  execFileSync(BLENDER, ['--background', '--python', script, '--', ...args.map(String)], { stdio: ['ignore', 'ignore', 'inherit'] });
   const raw = `models/${name}.raw.glb`;
   const out = `models/${name}.glb`;
   if (!existsSync(raw)) throw new Error(`${raw} が できなかった`);
