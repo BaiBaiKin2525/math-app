@@ -745,15 +745,26 @@ def pupa_texture():
     return image('pupa_skin', col)
 
 
+def rot_z(p, a):
+    """アプリの ざひょうで z（まえうしろ）の まわりに まわす"""
+    c, s = math.cos(a), math.sin(a)
+    return np.array([p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]])
+
+
 def build_pupa(root):
+    """さなぎは せなかを したに して ねている（はらが うえ）。あたまは はらがわに まがり、
+    クワガタの おおあごは はらに そって うしろへ、あしの うえに たたまれる（ネットの しゃしんを さんこう）
+    ここでは せなかが うえの むきで つくり、flip で ひっくりかえす"""
     tex = material('pupa_abdomen', img=pupa_texture(), rough=0.3, coat=0.8)
-    skin = material('pupa_skin', (0.74, 0.45, 0.18), rough=0.3, coat=0.8)
-    fold = material('pupa_fold', (0.6, 0.33, 0.13), rough=0.35, coat=0.6)
+    skin = material('pupa_skin', (0.78, 0.5, 0.21), rough=0.3, coat=0.8)
+    fold = material('pupa_fold', (0.72, 0.44, 0.18), rough=0.32, coat=0.7)
     room = material('pupa_room', (0.16, 0.09, 0.05), rough=0.95)
     r = Builder()
     r.blob((0, 0.006, 0), (0.34, 0.004, 0.6), seg=28)
     mesh_obj('room', r.bm, room, root)
-    # おなか：6つの ふし、おしりに むかって ほそく なる
+    flip = empty('flip', (0, 0.3, 0), root)
+    flip.rotation_euler = (0, math.pi, 0)          # z の まわりに 180ど（せなかが したに なる）
+    # おなか：6つの ふし、おしりに むかって ほそく なる。よこに ちいさな とっき
     def abd(u, p):
         t = 1 - 0.45 * max(0.0, -u[2]) ** 1.6
         f = ((1 - u[2]) / 2 * 6) % 1
@@ -765,26 +776,81 @@ def build_pupa(root):
         return p
     b = Builder()
     b.blob((0, 0.13, -0.2), (0.2, 0.15, 0.27), deform=abd, seg=48)
-    mesh_obj('abdomen', b.bm, tex, root)
+    mesh_obj('abdomen', b.bm, tex, flip)
     b = Builder()
-    b.blob((0, 0.15, 0.1), (0.21, 0.16, 0.19), e=0.95, seg=36)
-    b.blob((0, 0.14, 0.3), (0.12, 0.1, 0.1), seg=24)
+    for i in range(5):
+        z = 0.0 - i * 0.085
+        w = 0.19 * (1 - 0.45 * max(0.0, -(z + 0.2) / 0.27) ** 1.6)
+        for sgn in (-1, 1):
+            q = np.array([sgn * w * 0.95, 0.15, z - 0.03])
+            b.cone(q, q + np.array([sgn * 0.03, 0.01, -0.01]), 0.014)
+    # むね（せなか）と、はらがわに まがった あたま
+    b.blob((0, 0.16, 0.12), (0.2, 0.14, 0.15), e=0.92, seg=36)
+    b.blob((0, 0.1, 0.25), (0.15, 0.11, 0.09), seg=24)
+    b.blob((0, 0.06, 0.33), (0.13, 0.085, 0.09), e=0.92, deform=lambda u, p: np.array([p[0], p[1] * 0.95 - 0.35 * p[2] * 0.3, p[2]]), seg=28)
     b.taper([(0, 0.1, -0.44), (0, 0.095, -0.49)], 0.02, 0.004, n=4, ring=6)
-    mesh_obj('pupa_body', b.bm, skin, root)
+    mesh_obj('pupa_body', b.bm, skin, flip)
+
+    def belly(x, z):
+        """はらがわの ひょうめんの たかさ（せなかが うえの むきで いちばん した）"""
+        ys = []
+        u2 = (z + 0.2) / 0.27
+        t = 1 - 0.45 * max(0.0, -u2) ** 1.6
+        q = max(0.0, 1 - (x / (0.2 * t)) ** 2 - u2 ** 2)
+        ys.append(0.13 - 0.15 * t * 0.75 * math.sqrt(q))
+        q = 1 - (x / 0.2) ** 2 - ((z - 0.12) / 0.15) ** 2
+        if q > 0:
+            ys.append(0.16 - 0.14 * math.sqrt(q))
+        q = 1 - (x / 0.15) ** 2 - ((z - 0.25) / 0.09) ** 2
+        if q > 0:
+            ys.append(0.1 - 0.11 * math.sqrt(q))
+        return min(ys)
+
+    def on(x, z, lift):
+        return np.array([x, belly(x, z) - lift, z])
+
     f = Builder()
-    for s in (-1, 1):
-        f.blob((s * 0.17, 0.12, 0.0), (0.05, 0.085, 0.21), deform=lambda u, p, s=s: rot_y(p, s * 0.15), seg=24)   # たたまれた はね
-        f.blob((s * 0.1, 0.17, 0.33), (0.025, 0.03, 0.03), seg=10)                                               # め
-        for z0, z1 in ((0.22, 0.05), (0.17, -0.02), (0.12, -0.1)):                                               # たたまれた あし
-            f.taper([(s * 0.09, 0.03, z0), (s * 0.1, 0.03, (z0 + z1) / 2), (s * 0.05, 0.03, z1)], 0.02, 0.012, n=8, ring=8)
-    mesh_obj('pupa_fold', f.bm, fold, root)
+    for sgn in (-1, 1):
+        # たたまれた はね：むねの よこから はらがわへ まきこむ
+        f.blob((sgn * 0.17, 0.1, -0.05), (0.025, 0.075, 0.17), deform=lambda u, p, sgn=sgn: rot_z(p, sgn * 0.3), seg=24)
+        f.blob((sgn * 0.11, 0.07, 0.36), (0.028, 0.032, 0.032), seg=10)                      # め
+        # たたまれた あし：もも は よこへ、すね・ふせつ は はらの まんなかへ うしろむきに
+        # （x, z）だけ きめて、たかさは はらの ひょうめんに そわせる
+        for hip, knee, ank, toe in (
+            ((0.05, 0.2), (0.12, 0.15), (0.07, 0.05), (0.035, -0.06)),
+            ((0.06, 0.12), (0.13, 0.04), (0.08, -0.06), (0.045, -0.17)),
+            ((0.06, 0.05), (0.135, -0.06), (0.09, -0.17), (0.05, -0.28)),
+        ):
+            m = lambda v, lift: on(sgn * v[0], v[1], lift)
+            f.taper([m(hip, -0.01), m(knee, 0.018)], 0.027, 0.024, n=6, ring=10)
+            f.blob(tuple(m(knee, 0.018)), (0.024, 0.022, 0.024), seg=10)
+            f.taper([m(knee, 0.018), m(ank, 0.016)], 0.022, 0.018, n=6, ring=10)
+            mid = (np.array(ank) + np.array(toe)) / 2
+            f.taper([m(ank, 0.016), m(mid, 0.012), m(toe, 0.01)], 0.014, 0.009, n=8, ring=8)
+        # しょっかく：あたまから はね の まえへ
+        f.taper([(sgn * 0.09, 0.02, 0.36), (sgn * 0.15, 0.0, 0.3), (sgn * 0.16, 0.02, 0.2)], 0.012, 0.008, n=8, ring=8)
+    mesh_obj('pupa_fold', f.bm, fold, flip)
+    # カブトムシ：あたまの つのは まえへ まっすぐ のびて さきが ふたまた（むねの つのは せなかがわで みえない）
+    horn = empty('pupa_horn', (0, 0.05, 0.4), flip)
     hb = Builder()
-    hb.taper([(0, 0.17, 0.36), (0, 0.19, 0.46), (0, 0.23, 0.53), (0, 0.29, 0.57)], 0.035, 0.018, n=16)
-    mesh_obj('pupa_horn', hb.bm, fold, root)
+    tip = np.array([0, -0.03, 0.17])
+    hb.taper([(0, 0, 0), (0, -0.03, 0.06), (0, -0.035, 0.12), tip], 0.045, 0.028, n=16)
+    for sgn in (-1, 1):
+        hb.taper([tip, tip + np.array([sgn * 0.035, 0.0, 0.045])], 0.026, 0.012, n=6, ring=8)
+    mesh_obj('pupa_horn_mesh', hb.bm, fold, horn)
+    # クワガタ：おおあごは あたまの さきから はらがわへ まがり、あしの うえを うしろへ（アプリで ながさを かえる）
+    base = np.array([0, 0.02, 0.37])
+    jaws = empty('pupa_jaws', tuple(base), flip)
     jb = Builder()
-    for s in (-1, 1):
-        jb.taper([(s * 0.05, 0.12, 0.36), (s * 0.07, 0.12, 0.46), (s * 0.03, 0.12, 0.54)], 0.035, 0.012, n=10)
-    mesh_obj('pupa_jaws', jb.bm, fold, root)
+    for sgn in (-1, 1):
+        # あたまの さきで はらがわへ まがり、あしの うえ（lift 0.05）を うしろへ
+        pts = [np.array([sgn * 0.04, 0.02, 0.37]), np.array([sgn * 0.085, -0.02, 0.38]), on(sgn * 0.11, 0.3, 0.05),
+               on(sgn * 0.1, 0.17, 0.052), on(sgn * 0.07, 0.03, 0.052), on(sgn * 0.035, -0.08, 0.048), on(sgn * 0.012, -0.13, 0.04)]
+        path = jb.taper([q - base for q in pts], 0.04, 0.014, n=36, ring=12)
+        for uu in (0.45, 0.62):
+            q = path[int(uu * (len(path) - 1))]
+            jb.cone(q, q + np.array([-sgn * 0.03, -0.004, 0.0]), 0.012)
+    mesh_obj('pupa_jaws_mesh', jb.bm, fold, jaws)
 
 
 def main():

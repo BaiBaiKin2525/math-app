@@ -733,13 +733,18 @@ function buildLarvaModel() {
   return { group: g, legs: [], anim };
 }
 
-// Blender の さなぎ：カブトは つの、クワガタは あごを だす
+// Blender の さなぎ：せなかを したに ねていて、はらがわ（うえ）に あし・あごが たたまれている。
+// カブトは つの、クワガタは あごを だす
 function buildPupaModel(species) {
   const g = BUGS.pupa.clone(true);
   const horn = g.getObjectByName('pupa_horn');
   const jaws = g.getObjectByName('pupa_jaws');
   if (horn) horn.visible = species === 'kabuto';
-  if (jaws) jaws.visible = species !== 'kabuto' && !!(BEETLE_STYLE[species] && BEETLE_STYLE[species].jaw);
+  const jawLen = BEETLE_STYLE[species] && BEETLE_STYLE[species].jaw;
+  if (jaws) {
+    jaws.visible = species !== 'kabuto' && !!jawLen;
+    if (jawLen) jaws.scale.setScalar(0.55 + 0.45 * jawLen); // コクワガタは みじかく、ノコギリは ながく
+  }
   return { group: g, legs: [] };
 }
 
@@ -1273,7 +1278,7 @@ export function createInsectRoom(container, { onSelect }) {
     const [cw, cd] = caseDims;
     const underX = (Math.random() * 2 - 1) * (cw / 2 - len);
     // からだ ぜんぶが つちの なかに おさまる ふかさ
-    const half = (p.stage === 'pupa' ? 0.55 : 0.45) * len;
+    const half = (p.stage === 'pupa' ? (p.species === 'kabuto' ? 0.62 : 0.55) : 0.45) * len; // カブトの さなぎは つのの ぶん ながい
     const top = -half - 0.3;
     const bottom = -SOIL + half + 0.2;
     const underY = bottom < top ? bottom + Math.random() * (top - bottom) : -SOIL / 2;
