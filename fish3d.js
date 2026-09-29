@@ -370,7 +370,109 @@ function bend(mat, U, fin) {
   return mat;
 }
 
+// ---------- Blender で つくった モデル（models/*.glb） ----------
+// よみこめた しゅるいは そちらを つかう。よみこむ まえ・よみこめない ときは プログラムで つくった さかな
+const MODEL_URLS = { medaka: 'models/medaka.glb', himedaka: 'models/himedaka.glb' };
+const GLB = {};
+const modelListeners = new Set();
+let modelsLoading = null;
+
+export function loadModels() {
+  if (!modelsLoading) {
+    modelsLoading = (async () => {
+      const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
+        import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm'),
+        import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js/+esm'),
+      ]);
+      const loader = new GLTFLoader();
+      loader.setMeshoptDecoder(MeshoptDecoder);
+      await Promise.all(Object.entries(MODEL_URLS).map(async ([k, url]) => {
+        try {
+          GLB[k] = bakeTransforms((await loader.loadAsync(url)).scene);
+          modelListeners.forEach((fn) => fn(k));
+        } catch (e) {
+          console.warn(`${url} を よみこめませんでした`, e);
+        }
+      }));
+    })().catch((e) => console.warn('モデルを よみこめませんでした', e));
+  }
+  return modelsLoading;
+}
+
+// かるく する ときに かたちが ちいさな かずに まとめられ、いちと おおきさが べつに なっている。
+// くねりの けいさんは さかなの ざひょう（ながさ 1）で するので、もとの ざひょうに もどす
+function bakeTransforms(root) {
+  root.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const geo = new THREE.BufferGeometry();
+    const m = o.matrixWorld;
+    const nm = new THREE.Matrix3().getNormalMatrix(m);
+    const src = o.geometry.attributes;
+    const pos = new Float32Array(src.position.count * 3);
+    const nor = src.normal ? new Float32Array(src.normal.count * 3) : null;
+    for (let i = 0; i < src.position.count; i++) {
+      v.fromBufferAttribute(src.position, i).applyMatrix4(m);
+      pos.set([v.x, v.y, v.z], i * 3);
+      if (nor) {
+        v.fromBufferAttribute(src.normal, i).applyMatrix3(nm).normalize();
+        nor.set([v.x, v.y, v.z], i * 3);
+      }
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    if (nor) geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    if (src.uv) {
+      const uv = new Float32Array(src.uv.count * 2);
+      for (let i = 0; i < src.uv.count; i++) uv.set([src.uv.getX(i), src.uv.getY(i)], i * 2);
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    }
+    if (o.geometry.index) geo.setIndex(o.geometry.index.clone());
+    if (!nor) geo.computeVertexNormals();
+    o.geometry.dispose();
+    o.geometry = geo;
+  });
+  // いちと おおきさは もう かたちに はいったので、ぜんぶ もとに もどす
+  root.traverse((o) => {
+    o.position.set(0, 0, 0);
+    o.quaternion.identity();
+    o.scale.set(1, 1, 1);
+  });
+  return root;
+}
+
+function buildModelFish(species, seed) {
+  const L = LOOK[species];
+  const r = rng(seed);
+  const U = { uPhase: { value: r() * 6 }, uAmp: { value: L.amp }, uTurn: { value: 0 }, uTime: { value: 0 }, uFlutter: { value: L.flutter ?? 0.018 } };
+  const g = GLB[species].clone(true);
+  let body = null;
+  // 1ぴきずつ すこし いろを かえる
+  const tint = new THREE.Color().setHSL(0, 0, 0.9 + r() * 0.2);
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = o.material.clone();
+    if (o.name.startsWith('fins')) {
+      Object.assign(o.material, { transparent: true, depthWrite: false, side: THREE.DoubleSide });
+      bend(o.material, U, true);
+      o.renderOrder = 2;
+    } else if (o.name.startsWith('body')) {
+      o.material.color.multiply(tint);
+      o.material.envMapIntensity = 0.9;
+      bend(o.material, U, false);
+      body = o;
+    } else if (o.name.startsWith('pupil')) {
+      o.material.envMapIntensity = 1.5;
+    }
+  });
+  return { group: g, U, L, body };
+}
+
 function buildFish(species, seed = 1) {
+  return GLB[species] ? buildModelFish(species, seed) : buildProceduralFish(species, seed);
+}
+
+function buildProceduralFish(species, seed = 1) {
   const L = LOOK[species] || LOOK.medaka;
   const T = textures();
   const r = rng(seed);
@@ -1288,7 +1390,7 @@ function buildHeater(tank) {
 
 // ---------- ずかん よう：1ぴきを くるくる まわして みせる ----------
 
-export function createFishViewer(container, { species, seed = 3 }) {
+export function createFishViewer(container, { species, seed = 3, view = null }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1300,20 +1402,33 @@ export function createFishViewer(container, { species, seed = 3 }) {
   const sun = new THREE.DirectionalLight(0xffffff, 1.5);
   sun.position.set(2, 5, 3);
   scene.add(sun);
-  const model = buildFish(species, seed);
   const turn = new THREE.Group();
-  const bb = new THREE.Box3().setFromObject(model.group);
-  const size = bb.getSize(new THREE.Vector3()).length();
-  model.group.position.sub(bb.getCenter(new THREE.Vector3()));
-  turn.add(model.group);
   scene.add(turn);
   const camera = new THREE.PerspectiveCamera(24, 1, 0.01, 50);
-  camera.position.set(size * 1.6, size * 0.45, size * 1.6);
-  camera.lookAt(0, 0, 0);
+  let model = null;
+  const place = () => {
+    if (model) {
+      turn.remove(model.group);
+      disposeTree(model.group);
+    }
+    model = buildFish(species, seed);
+    const bb = new THREE.Box3().setFromObject(model.group);
+    const size = bb.getSize(new THREE.Vector3()).length();
+    model.group.position.sub(bb.getCenter(new THREE.Vector3()));
+    turn.add(model.group);
+    // view：たしかめ よう（[x, y, z] の むきから みる）
+    const d = view ? V(...view).normalize().multiplyScalar(size * 2.1) : V(size * 1.6, size * 0.45, size * 1.6);
+    camera.position.copy(d);
+    camera.lookAt(0, 0, 0);
+  };
+  place();
+  const onModel = (k) => k === species && place();
+  modelListeners.add(onModel);
+  loadModels();
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enablePan = false;
   controls.enableDamping = true;
-  controls.autoRotate = true;
+  controls.autoRotate = !view;
   controls.autoRotateSpeed = 2;
   renderer.domElement.addEventListener('pointerdown', () => (controls.autoRotate = false));
   const resize = () => {
@@ -1345,6 +1460,7 @@ export function createFishViewer(container, { species, seed = 3 }) {
       return renderer.domElement.toDataURL('image/jpeg', 0.85);
     },
     dispose() {
+      modelListeners.delete(onModel);
       cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
@@ -1550,6 +1666,25 @@ export function createAquarium(container, { onSelect }) {
     selected = id;
     marker.visible = !!(id && actors.get(id));
   }
+
+  // Blender の モデルが とどいたら、その しゅるいの さかなを おきかえる（いる ばしょは そのまま）
+  const onModel = (k) => {
+    const sel = selected;
+    for (const a of [...actors.values()]) {
+      if (a.pet.species !== k) continue;
+      const { pet } = a;
+      const pos = a.g.position.clone();
+      const yaw = a.yaw;
+      removeActor(pet.id);
+      addActor(pet);
+      const b = actors.get(pet.id);
+      b.g.position.copy(pos);
+      b.yaw = yaw;
+    }
+    select(sel);
+  };
+  modelListeners.add(onModel);
+  loadModels();
 
   // えさ：すいめんに うかんで、ゆっくり しずむ
   function feed(n) {
@@ -1786,6 +1921,7 @@ export function createAquarium(container, { onSelect }) {
   loop();
 
   function dispose() {
+    modelListeners.delete(onModel);
     cancelAnimationFrame(raf);
     ro.disconnect();
     controls.dispose();
