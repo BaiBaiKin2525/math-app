@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v42';
+const VERSION = 'v43';
 const FILES = [
   './',
   'index.html',
@@ -16,6 +16,7 @@ const FILES = [
   'pazuru.js',
   'suiri.js',
   'kakezan.js',
+  'kakudo.js',
   'tenkai.js',
   'net3d.js',
   'solid3d.js',

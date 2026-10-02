@@ -1176,3 +1176,32 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 .adult-badge { font-size: 12px; background: #8a6ad0; color: #fff; border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
 .set-pw { font-size: 18px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; min-width: 0; flex: 1; }
 .set-adult-on { font-weight: bold; color: #2c7a45; }
+
+/* かくど パズル */
+.kd-wrap { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.kd-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.kd-slot { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: #eee6d6; border: 3px solid #d8ccb6; font-size: 20px; }
+.kd-slot.now { border-color: #f0a030; background: #fff4df; }
+.kd-slot.done { background: #e3f4e0; border-color: #6bbf63; }
+.kd-arrow { color: #b9ab92; font-weight: 700; }
+.kd-goal { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: #ffe1dc; border: 3px solid #e2553f; color: #e2553f; font-weight: 800; font-size: 22px; }
+.kd-svg { width: 100%; flex: 1; min-height: 0; background: #fffdf8; border-radius: 14px; }
+.kd-seg { stroke: #3a3530; stroke-width: 3.5; stroke-linecap: round; }
+.kd-tick { stroke: #3a3530; stroke-width: 2.5; }
+.kd-par { stroke: #3a3530; stroke-width: 2.5; fill: none; }
+.kd-wedge { stroke: none; opacity: .35; }
+.kd-arc { fill: none; stroke-width: 3; }
+.kd-wedge.given { fill: #4d96ff; } .kd-arc.given { stroke: #2f6fd6; }
+.kd-wedge.found { fill: #5cbf5a; } .kd-arc.found { stroke: #3f9a3d; }
+.kd-wedge.target { fill: #e2553f; } .kd-arc.target { stroke: #c43a25; }
+.kd-wedge.sel { fill: #22c6d8; opacity: .6; } .kd-arc.sel { stroke: #0b9fb0; }
+.kd-wedge.cur { fill: #f0a030; opacity: .5; } .kd-arc.cur { stroke: #d98510; }
+.kd-label { font-size: 19px; font-weight: 800; fill: #2a2622; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: #fffdf8; stroke-width: 5px; pointer-events: none; }
+.kd-label.target { fill: #d23a22; font-size: 24px; }
+.kd-label.cur { fill: #c87400; font-size: 24px; }
+.kd-hit { fill: transparent; cursor: pointer; }
+.kd-icon { width: 30px; height: 30px; flex: none; fill: none; stroke: #3a3530; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.kd-icon .a { stroke: #e2553f; }
+.kd-slot .kd-icon { width: 28px; height: 28px; }
+.key.choice .kd-icon { width: 38px; height: 38px; margin-right: 10px; vertical-align: middle; }
+.key.choice:has(.kd-icon) { display: flex; align-items: center; justify-content: flex-start; text-align: left; }
