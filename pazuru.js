@@ -84,119 +84,223 @@ UNITS.pazuru = {
     return [{
       kind: 'puzzle',
       prompt: `いたを ぜんぶ つかって、${rb('形', 'かたち')}を ぴったり うめよう`,
-      say: `いたを えらんで、● の マスを おきたい ところに タップ`,
+      say: 'いたを ゆびで うごかして、ばんの うえで はなすと ぴたっと はまるよ。タップで まわす',
     }];
   },
 
+  // いたは ゆびで じゆうに うごかせる。ばんの うえで はなすと マスに ぴたっと はまる（まちがった ばしょでも はまる）。
+  // ぜんぶの いたが はまって、すきまも かさなりも はみだしも ない ときに せいかい（こたえの しきつめかた いがいでも よい）
   view(box, q, api) {
     const P = parsePuzzle(q.puzzle);
-    const view = { selected: null, placed: {}, shapes: {} };
-    P.pieces.forEach((p) => (view.shapes[p.id] = p.shape));
-    const occupied = () => {
-      const m = {};
-      for (const [id, cells] of Object.entries(view.placed)) for (const k of cells) m[k] = Number(id);
+    const view = {};
+    const maskSet = new Set(P.mask);
+    // いた：shape（いまの むき）、at（はまっている マス {r, c}）、free（ばんの そとの いち。マスの たんい）
+    const pieces = P.pieces.map((p) => ({ ...p, at: null, free: null }));
+    let last = null;          // さいごに さわった いた（うらがえす ボタン よう）
+    let geo = null;           // いまの おおきさ（cell、ばんの いち、トレイの いち）
+    let done = false;
+
+    const sizeOf = (shape) => [Math.max(...shape.map((c) => c[0])) + 1, Math.max(...shape.map((c) => c[1])) + 1];
+    const cellsOf = (p) => (p.at ? p.shape.map(([r, c]) => [p.at.r + r, p.at.c + c]) : []);
+
+    // ばんの マスごとに、なんまいの いたが のっているか
+    function cover() {
+      const m = new Map();
+      for (const p of pieces) for (const [r, c] of cellsOf(p)) {
+        const k = `${r},${c}`;
+        m.set(k, (m.get(k) || 0) + 1);
+      }
       return m;
-    };
+    }
+    const badCell = (k, m) => !maskSet.has(k) || m.get(k) > 1;
+
+    // トレイ（ばんの よこ・した）に ならべる
+    function layoutTray() {
+      let x = 0, y = 0, rowH = 0;
+      for (const p of pieces) {
+        if (p.at || p.free) continue;
+        const [h, w] = sizeOf(p.shape);
+        if (x + w > geo.trayCols && x > 0) { x = 0; y += rowH + 0.6; rowH = 0; }
+        p.free = { x: geo.trayX + x, y: geo.trayY + y };
+        x += w + 0.6;
+        rowH = Math.max(rowH, h);
+      }
+    }
 
     view.draw = () => {
       box.innerHTML = '';
-      const r = box.getBoundingClientRect();
+      const W = box.clientWidth || 600, H = box.clientHeight || 400;
       const areaOnly = q.kind === 'area';
-      const cell = Math.max(28, Math.min(64, (r.width - 40) / (P.cols + (areaOnly ? 1 : 5)), (r.height - 40) / (P.rows + 1)));
-      const wrap = document.createElement('div');
-      wrap.className = 'pz-wrap';
-      wrap.style.setProperty('--c', `${cell}px`);
-      // ばん
-      const board = document.createElement('div');
-      board.className = 'pz-board';
-      board.style.gridTemplateColumns = `repeat(${P.cols}, var(--c))`;
-      const occ = occupied();
-      for (let rr = 0; rr < P.rows; rr++) {
-        for (let cc = 0; cc < P.cols; cc++) {
-          const key = `${rr},${cc}`;
-          const d = document.createElement('button');
-          const inMask = P.mask.includes(key);
-          d.className = 'pz-cell' + (inMask ? '' : ' out');
-          if (occ[key] !== undefined) {
-            d.style.background = P.pieces[occ[key]].color;
-            d.classList.add('filled');
-          }
-          if (inMask && !areaOnly) d.addEventListener('click', () => tapBoard(rr, cc));
-          board.appendChild(d);
+      // いちばん おおきく できる マスの おおきさを さがす（ばんの よこ か した に いたを ならべる）
+      const pack = (trayCols) => {
+        let x = 0, y = 0, rowH = 0, maxW = 0;
+        for (const p of pieces) {
+          const [h, w] = sizeOf(p.shape);
+          if (x + w > trayCols && x > 0) { x = 0; y += rowH + 0.6; rowH = 0; }
+          x += w + 0.6;
+          maxW = Math.max(maxW, x - 0.6);
+          rowH = Math.max(rowH, h);
         }
+        return { w: maxW, h: y + rowH };
+      };
+      let best = null;
+      if (areaOnly) {
+        const cell = Math.max(28, Math.min(64, (W - 30) / P.cols, (H - 30) / P.rows));
+        best = { cell, wide: false, trayCols: 0 };
+      } else {
+        for (let cell = 72; cell >= 20 && !best; cell -= 2) {
+          const cw = Math.floor((W - 20) / cell), ch = (H - 20) / cell;
+          for (const wide of [true, false]) {
+            const trayCols = wide ? cw - P.cols - 1 : cw;
+            if (trayCols < 3) continue;
+            const t = pack(trayCols);
+            const ok = wide ? Math.max(P.rows, t.h) <= ch - 1.2 : P.rows + 1 + t.h <= ch - 1.2;
+            if (ok && t.w <= trayCols) { best = { cell, wide, trayCols }; break; }
+          }
+        }
+        best = best || { cell: 20, wide: false, trayCols: Math.floor((W - 20) / 20) };
       }
-      wrap.appendChild(board);
-      // いたの おきば
+      const { cell, wide } = best;
+      const bx = areaOnly ? (W - P.cols * cell) / 2 : 10;
+      const by = areaOnly ? (H - P.rows * cell) / 2 : 10;
+      geo = {
+        cell, bx, by,
+        trayX: wide ? P.cols + 1 : 0, trayY: wide ? 0 : P.rows + 1,
+        trayCols: best.trayCols,
+      };
+      const stage = document.createElement('div');
+      stage.className = 'pz-stage';
+      stage.style.setProperty('--c', `${cell}px`);
+      // ばん
+      for (let r = 0; r < P.rows; r++) for (let c = 0; c < P.cols; c++) {
+        if (!maskSet.has(`${r},${c}`)) continue;
+        const d = document.createElement('div');
+        d.className = 'pz-slot';
+        d.style.left = `${bx + c * cell}px`;
+        d.style.top = `${by + r * cell}px`;
+        stage.appendChild(d);
+      }
       if (!areaOnly) {
-        const tray = document.createElement('div');
-        tray.className = 'pz-tray';
-        for (const p of P.pieces) {
-          if (view.placed[p.id]) continue;
-          const shape = view.shapes[p.id];
-          const h = Math.max(...shape.map((c) => c[0])) + 1;
-          const w = Math.max(...shape.map((c) => c[1])) + 1;
-          const pc = document.createElement('button');
-          pc.className = 'pz-piece' + (view.selected === p.id ? ' selected' : '');
-          pc.style.gridTemplateColumns = `repeat(${w}, calc(var(--c) * .55))`;
-          for (let rr = 0; rr < h; rr++) {
-            for (let cc = 0; cc < w; cc++) {
-              const s = document.createElement('span');
-              const k = shape.findIndex((c) => c[0] === rr && c[1] === cc);
-              if (k >= 0) {
-                s.style.background = p.color;
-                if (k === 0) s.className = 'anchor'; // ここを タップした マスに おく
-              } else s.className = 'empty';
-              pc.appendChild(s);
-            }
-          }
-          pc.addEventListener('click', () => {
-            view.selected = view.selected === p.id ? null : p.id;
-            api.tick();
-            view.draw();
-          });
-          tray.appendChild(pc);
-        }
+        layoutTray();
+        const m = cover();
+        for (const p of pieces) stage.appendChild(pieceEl(p, m));
         const tools = document.createElement('div');
-        tools.className = 'pz-tools';
-        tools.innerHTML = '<button class="small-btn" data-t="rot">🔄 まわす</button><button class="small-btn" data-t="flip">↔ うらがえす</button>';
-        tools.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
-          if (view.selected === null) return api.say('さきに いたを えらんでね', true);
-          view.shapes[view.selected] = b.dataset.t === 'rot' ? rotateCells(view.shapes[view.selected]) : flipCells(view.shapes[view.selected]);
+        tools.className = 'pz-tools2';
+        tools.innerHTML = '<button class="small-btn" data-t="flip">↔ うらがえす</button><button class="small-btn" data-t="reset">↩ ぜんぶ もどす</button>';
+        tools.querySelector('[data-t=flip]').addEventListener('click', () => {
+          if (!last) return api.say('さきに いたを さわってね', true);
+          turn(last, flipCells);
+        });
+        tools.querySelector('[data-t=reset]').addEventListener('click', () => {
+          if (api.locked()) return;
+          pieces.forEach((p) => { p.at = null; p.free = null; });
           api.tick();
           view.draw();
-        }));
-        tray.appendChild(tools);
-        wrap.appendChild(tray);
+        });
+        stage.appendChild(tools);
       }
-      box.appendChild(wrap);
+      box.appendChild(stage);
     };
 
-    function tapBoard(r, c) {
-      if (api.locked()) return;
-      const occ = occupied();
-      const key = `${r},${c}`;
-      // おいてある いたを タップ → もどす
-      if (view.selected === null) {
-        if (occ[key] !== undefined) {
-          delete view.placed[occ[key]];
-          api.tick();
-          view.draw();
-        }
-        return;
+    function pieceEl(p, m) {
+      const { cell, bx, by } = geo;
+      const el = document.createElement('div');
+      el.className = 'pz-pc' + (p.at ? ' on' : '') + (last === p ? ' last' : '');
+      const x = p.at ? bx + p.at.c * cell : bx + p.free.x * cell;
+      const y = p.at ? by + p.at.r * cell : by + p.free.y * cell;
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      for (const [r, c] of p.shape) {
+        const s = document.createElement('span');
+        const k = p.at ? `${p.at.r + r},${p.at.c + c}` : null;
+        s.className = 'pz-sq' + (k && badCell(k, m) ? ' bad' : '');
+        s.style.left = `${c * cell}px`;
+        s.style.top = `${r * cell}px`;
+        s.style.background = p.color;
+        el.appendChild(s);
       }
-      const shape = view.shapes[view.selected];
-      const [ar, ac] = shape[0];
-      const cells = shape.map(([sr, sc]) => `${r + sr - ar},${c + sc - ac}`);
-      const fits = cells.every((k) => P.mask.includes(k) && occ[k] === undefined);
-      if (!fits) {
-        api.say('そこには はいらないよ。まわしたり うらがえしたり してみよう', true);
-        return;
+      // ゆびで うごかす
+      el.addEventListener('pointerdown', (e) => {
+        if (api.locked()) return;
+        e.preventDefault();
+        try { el.setPointerCapture(e.pointerId); } catch { /* ゆび いがい */ }
+        last = p;
+        const start = { x: e.clientX, y: e.clientY, left: x, top: y };
+        let moved = false;
+        el.classList.add('drag');
+        // わくの そとへ いかない ように
+        const [ph, pw] = sizeOf(p.shape);
+        const lim = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const pos = (ev) => ({
+          left: lim(start.left + ev.clientX - start.x, 0, (box.clientWidth || 600) - pw * geo.cell),
+          top: lim(start.top + ev.clientY - start.y, 0, (box.clientHeight || 400) - ph * geo.cell),
+        });
+        const move = (ev) => {
+          if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > 6) moved = true;
+          const q2 = pos(ev);
+          el.style.left = `${q2.left}px`;
+          el.style.top = `${q2.top}px`;
+        };
+        const up = (ev) => {
+          el.removeEventListener('pointermove', move);
+          el.removeEventListener('pointerup', up);
+          el.removeEventListener('pointercancel', up);
+          if (!moved) return turn(p, rotateCells);        // タップ：まわす
+          const q2 = pos(ev);
+          drop(p, q2.left, q2.top);
+        };
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+      });
+      return el;
+    }
+
+    // はなした ところ：いたが すこしでも ばんに かかれば、いちばん ちかい マスに はまる
+    function drop(p, left, top) {
+      const { cell, bx, by } = geo;
+      const c = Math.round((left - bx) / cell), r = Math.round((top - by) / cell);
+      const [h, w] = sizeOf(p.shape);
+      const overlap = r < P.rows && c < P.cols && r + h > 0 && c + w > 0;
+      if (overlap) {
+        p.at = { r, c };
+        p.free = null;
+      } else {
+        p.at = null;
+        p.free = { x: (left - bx) / cell, y: (top - by) / cell };
       }
-      view.placed[view.selected] = cells;
-      view.selected = null;
       api.tick();
       view.draw();
-      if (Object.keys(view.placed).length === P.pieces.length) api.correct('ぴったり！');
+      check();
+    }
+
+    function turn(p, fn) {
+      if (api.locked()) return;
+      const [h0, w0] = sizeOf(p.shape);
+      p.shape = fn(p.shape);
+      const [h1, w1] = sizeOf(p.shape);
+      // まんなかを なるべく おなじ ところに
+      const dr = Math.round((h0 - h1) / 2), dc = Math.round((w0 - w1) / 2);
+      if (p.at) p.at = { r: p.at.r + dr, c: p.at.c + dc };
+      else if (p.free) p.free = { x: p.free.x + dc, y: p.free.y + dr };
+      last = p;
+      api.tick();
+      view.draw();
+      check();
+    }
+
+    function check() {
+      if (done) return;
+      if (!pieces.every((p) => p.at)) return;
+      const m = cover();
+      const bad = [...m.keys()].some((k) => badCell(k, m));
+      const full = P.mask.every((k) => m.get(k) === 1);
+      if (!bad && full) {
+        done = true;
+        api.correct('ぴったり！');
+      } else {
+        api.say(bad ? 'あかい ところが かさなったり はみだしたり しているよ。うごかして みよう' : 'まだ すきまが あるよ', true);
+      }
     }
 
     view.layout = () => view.draw();
