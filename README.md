@@ -262,5 +262,9 @@ SAPIX 2年の算数カリキュラム（公式サイトで公開されている�
 | ⑦ 2手でとこう | triVertical・lineTri・altTri・isoTri・equiTri・squareTri・quadLine・polyIso・fold2・ribbonLine | |
 | ⑧ 3手でとこう | vertLineTri・lineIsoTri・corrLineTri・rulers（三角定規2まい） | |
 | ⑨ 4手チャレンジ | isoChain（AB＝BC＝CD）＋ 3手の形 | |
+| ⑩ むずかしい問題（式なし） | squareIso（正方形の中の二等辺・正三角形 → ∠EAD）・pentaIn（正五角形の中の正三角形・正方形 → BC＝CF の二等辺）・star（星形の5つの角）・isoChain | 角のひき算（全体 − 一部） |
+| ⑪ 入試レベル（式なし） | isoChain5（AB＝BC＝CD＝DE、6手）・pentaInLong（∠ABF まで、6手）・starLine（外の角から、4手）・squareIso | |
+
+⑩⑪は計算の式を出さず、自分で計算する。同じ頂点にいくつも角があるときは、小さい角から順に弧を外へずらしてラベルが重ならないようにしている。
 
 問題の形は `KD_MAKE` に1つずつ（点・線・角・ルート）。角は「頂点・反時計まわりの2本の線・大きさ」で持つ（`kdA` で向きを自動で合わせる）。すべての形を回転・裏返しこみで多数回作り、図の角とルートの答えが合っているか・図がはみ出さないか・ラベルが重ならないかを自動で確かめてある。

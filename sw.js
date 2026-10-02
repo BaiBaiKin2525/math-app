@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v44';
+const VERSION = 'v45';
 const FILES = [
   './',
   'index.html',

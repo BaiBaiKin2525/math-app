@@ -650,6 +650,183 @@ function kdPlace(fig) {
   return fig;
 }
 
+// ---------- むずかしい 問題（入試レベル） ----------
+KD.tech.diff = { name: `${rb('角', 'かく')}の ひき${rb('算', 'ざん')}`, rule: `${rb('大', 'おお')}きい ${rb('角', 'かく')}から ${rb('中', 'なか')}の ${rb('角', 'かく')}を ひくと、のこりの ${rb('角', 'かく')}` };
+KD_ICON.diff = '<path d="M5 27h24M5 27L27 7M5 27L17 5" /><path d="M13 27a8 8 0 0 0-1.4-4.6" class="a"/><path d="M10 21.5a8 8 0 0 0-.6-3.3" />';
+
+// 2本の 線の あいだの 角（0〜180）
+function kdBetween(v, p, q) {
+  const d = Math.abs(kdAng(v, p) - kdAng(v, q)) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+Object.assign(KD_MAKE, {
+  // 正方形の 中の 二等辺三角形（BE＝BC）・正三角形：∠EAD を もとめる
+  squareIso() {
+    const g = pick([20, 30, 40, 50, 60, 60, 70]);
+    const eq = g === 60;
+    const s = 200;
+    const B = [0, 0], C = [s, 0], A = [0, -s], D = [s, -s];
+    const E = kdAdd(B, g, s);
+    const segs = [[A, B], [B, C], [C, D], [D, A], [B, E], [A, E]];
+    if (eq) segs.push([C, E]);
+    const ticks = [[A, B, 1], [B, C, 1], [C, D, 1], [D, A, 1], [B, E, 1]];
+    if (eq) ticks.push([C, E, 1]);
+    const angles = {
+      b90: kdA(B, A, C, 90, 'given'), a90: kdA(A, B, D, 90, 'given'),
+      ebc: kdA(B, E, C, g, eq ? 'hidden' : 'given'),
+      abe: kdA(B, A, E, 90 - g), bae: kdA(A, B, E, (90 + g) / 2),
+      x: kdA(A, E, D, (90 - g) / 2, 'target'),
+    };
+    const route = [
+      { tech: 'diff', uses: ['b90', 'ebc'], result: 'abe', formula: `90 − ${g}` },
+      { tech: 'isosceles', uses: ['abe'], result: 'bae', formula: `(180 − ${90 - g}) ÷ 2` },
+      { tech: 'diff', uses: ['a90', 'bae'], result: 'x', formula: `90 − ${(90 + g) / 2}` },
+    ];
+    if (eq) route.unshift({ tech: 'equilateral', uses: [], result: 'ebc', formula: '' });
+    return { segs, ticks, rights: [[B, A, C], [A, B, D]], angles, route };
+  },
+  // 正五角形の 中に 正三角形・正方形（BC＝CF の 二等辺三角形）
+  pentaIn(long = false) {
+    const sq = Math.random() < 0.4;
+    const P = kdPoly(5, 0, 0, 150);
+    const [A, B, C, D, E] = P;
+    const s = Math.hypot(D[0] - C[0], D[1] - C[1]);
+    const dCD = kdAng(C, D);
+    const inner = sq ? 90 : 60;
+    const F = kdAdd(C, dCD + inner, s);
+    const segs = P.map((p, k) => [p, P[(k + 1) % 5]]);
+    const ticks = P.map((p, k) => [p, P[(k + 1) % 5], 1]);
+    if (sq) {
+      const G = kdAdd(D, dCD + 90, s);
+      segs.push([C, F], [F, G], [G, D]);
+      ticks.push([C, F, 1], [F, G, 1], [G, D, 1]);
+    } else {
+      segs.push([C, F], [F, D]);
+      ticks.push([C, F, 1], [F, D, 1]);
+    }
+    segs.push([B, F]);
+    const bcf = 108 - inner, base = (180 - bcf) / 2;
+    const angles = {
+      bcd: kdA(C, B, D, 108), fcd: kdA(C, F, D, inner), bcf: kdA(C, B, F, bcf),
+      cbf: kdA(B, C, F, base, long ? 'hidden' : 'target'),
+    };
+    const route = [
+      { tech: 'regular', uses: [], result: 'bcd', formula: '180 × 3 ÷ 5' },
+      { tech: sq ? 'square' : 'equilateral', uses: [], result: 'fcd', formula: '' },
+      { tech: 'diff', uses: ['bcd', 'fcd'], result: 'bcf', formula: `108 − ${inner}` },
+      { tech: 'isosceles', uses: ['bcf'], result: long ? 'cbf' : 'x', formula: `(180 − ${bcf}) ÷ 2` },
+    ];
+    if (long) {
+      // さらに ∠ABF ＝ 108 − ∠CBF
+      angles.abc = kdA(B, A, C, 108);
+      angles.x = kdA(B, A, F, 108 - base, 'target');
+      route.push({ tech: 'regular', uses: [], result: 'abc', formula: '180 × 3 ÷ 5' });
+      route.push({ tech: 'diff', uses: ['abc', 'cbf'], result: 'x', formula: `108 − ${base}` });
+    } else {
+      angles.x = { ...angles.cbf, state: 'target' };
+      delete angles.cbf;
+    }
+    void E;
+    return { segs, ticks, rights: sq ? [[C, D, F]] : [], angles, route };
+  },
+  pentaInLong() { return KD_MAKE.pentaIn(true); },
+  // 星形（五芒星）：4つの さきの 角から のこりの 1つ
+  star(line = false) {
+    for (let guard = 0; guard < 500; guard++) {
+      // 円の 上の 5点。弧の 大きさ（20°きざみ）で さきの 角（弧の 半分）が きまる
+      const arcs = [];
+      let left = 360;
+      for (let i = 0; i < 4; i++) { const a = rand(3, 6) * 20; arcs.push(a); left -= a; }
+      if (left < 60 || left > 120) continue;
+      arcs.push(left);
+      const phi = [90];
+      for (let i = 0; i < 4; i++) phi.push(phi[i] + arcs[i]);
+      const V = phi.map((p) => kdAdd([0, 0], p, 150));
+      const edges = [[0, 2], [2, 4], [4, 1], [1, 3], [3, 0]];
+      const tipVal = (i) => {
+        const nb = edges.filter((e) => e.includes(i)).map((e) => (e[0] === i ? e[1] : e[0]));
+        return { nb, val: Math.round(kdBetween(V[i], V[nb[0]], V[nb[1]])) };
+      };
+      const tips = V.map((_, i) => tipVal(i));
+      if (tips.some((t) => t.val < 25 || t.val % 5)) continue;
+      // ？ は V0。V0 から 出る 2本の 辺で、いちばん V0 に ちかい 交わりの 点 P・Q
+      const inter = (p1, p2, p3, p4) => {
+        const d1 = [p2[0] - p1[0], p2[1] - p1[1]], d2 = [p4[0] - p3[0], p4[1] - p3[1]];
+        const den = d1[0] * d2[1] - d1[1] * d2[0];
+        if (Math.abs(den) < 1e-9) return null;
+        const t = ((p3[0] - p1[0]) * d2[1] - (p3[1] - p1[1]) * d2[0]) / den;
+        const u = ((p3[0] - p1[0]) * d1[1] - (p3[1] - p1[1]) * d1[0]) / den;
+        return t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6 ? { t, p: [p1[0] + d1[0] * t, p1[1] + d1[1] * t] } : null;
+      };
+      const near = (j) => edges.filter((e) => !e.includes(0) && !e.includes(j)).map((e) => inter(V[0], V[j], V[e[0]], V[e[1]])).filter(Boolean).sort((a, b) => a.t - b.t)[0];
+      const [j1, j2] = tips[0].nb;
+      const P = near(j1), Q = near(j2);
+      if (!P || !Q) continue;
+      // P の 角（三角形 V0PQ の 中）
+      const angP = Math.round(kdBetween(P.p, V[0], Q.p));
+      const angQ = 180 - tips[0].val - angP;
+      // どの 2つの さきの 角の 和か
+      const others = [1, 2, 3, 4];
+      const pairs = [];
+      for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) pairs.push([others[a], others[b]]);
+      const pp = pairs.find(([a, b]) => tips[a].val + tips[b].val === angP);
+      const qq = pp && pairs.find(([a, b]) => !pp.includes(a) && !pp.includes(b) && tips[a].val + tips[b].val === angQ);
+      if (!pp || !qq) continue;
+      const angles = {};
+      for (let i = 1; i <= 4; i++) angles[`t${i}`] = kdA(V[i], V[tips[i].nb[0]], V[tips[i].nb[1]], tips[i].val, 'given');
+      angles.p = kdA(P.p, V[0], Q.p, angP);
+      angles.q = kdA(Q.p, V[0], P.p, angQ);
+      angles.x = kdA(V[0], V[j1], V[j2], tips[0].val, 'target');
+      const route = [
+        { tech: 'slipper', uses: pp.map((i) => `t${i}`), result: 'p', formula: `${tips[pp[0]].val} + ${tips[pp[1]].val}` },
+        { tech: 'slipper', uses: qq.map((i) => `t${i}`), result: 'q', formula: `${tips[qq[0]].val} + ${tips[qq[1]].val}` },
+        { tech: 'triangle', uses: ['p', 'q'], result: 'x', formula: `180 − ${angP} − ${angQ}` },
+      ];
+      const segs = edges.map(([a, b]) => [V[a], V[b]]);
+      if (line) {
+        // ひとつの さきの 角を、辺を のばした 外の 角で しめす
+        const k = pp[0];
+        const [n0, n1] = tips[k].nb;
+        const ext = kdAdd(V[k], kdAng(V[n0], V[k]), 60);
+        segs.push([V[k], ext]);
+        angles[`e${k}`] = kdA(V[k], ext, V[n1], 180 - tips[k].val, 'given');
+        angles[`t${k}`] = { ...angles[`t${k}`], state: 'hidden' };
+        route.unshift({ tech: 'line', uses: [`e${k}`], result: `t${k}`, formula: `180 − ${180 - tips[k].val}` });
+      }
+      return { segs, angles, route };
+    }
+    return KD_MAKE.vertLineTri();
+  },
+  starLine() { return KD_MAKE.star(true); },
+  // AB＝BC＝CD＝DE：6手
+  isoChain5() {
+    const a = pick([15, 20]);
+    const s = 100, rad = (d) => (d * Math.PI) / 180;
+    const A = [0, 0];
+    const B = kdAdd(A, a, s);
+    const C = [2 * s * Math.cos(rad(a)), 0];
+    const D = kdAdd(A, a, s + 2 * s * Math.cos(rad(2 * a)));
+    const E = [C[0] + 2 * s * Math.cos(rad(3 * a)), 0];
+    const G = [E[0] + 60, 0], F = kdAdd(D, a, 50);
+    return {
+      segs: [[A, G], [A, F], [B, C], [C, D], [D, E]], ticks: [[A, B, 1], [B, C, 1], [C, D, 1], [D, E, 1]],
+      angles: {
+        g: kdA(A, C, B, a, 'given'), y1: kdA(C, B, A, a), y2: kdA(B, C, D, 2 * a), y3: kdA(D, C, B, 2 * a),
+        y4: kdA(C, E, D, 3 * a), y5: kdA(E, D, C, 3 * a), x: kdA(D, F, E, 4 * a, 'target'),
+      },
+      route: [
+        { tech: 'isosceles', uses: ['g'], result: 'y1', formula: '' },
+        { tech: 'slipper', uses: ['g', 'y1'], result: 'y2', formula: `${a} + ${a}` },
+        { tech: 'isosceles', uses: ['y2'], result: 'y3', formula: '' },
+        { tech: 'slipper', uses: ['g', 'y3'], result: 'y4', formula: `${a} + ${2 * a}` },
+        { tech: 'isosceles', uses: ['y4'], result: 'y5', formula: '' },
+        { tech: 'slipper', uses: ['g', 'y5'], result: 'x', formula: `${a} + ${3 * a}` },
+      ],
+    };
+  },
+});
+
 // ステージ：[もんだいの かたちの なかま, このステージの わざ（えらぶ ボタンに でる）]
 // 8もん。なかまを じゅんばんに まぜて、おなじ かたちが つづかない ように する
 const KD_STAGES = [
@@ -662,13 +839,16 @@ const KD_STAGES = [
   [['triVertical', 'lineTri', 'altTri', 'isoTri', 'equiTri', 'squareTri', 'quadLine', 'polyIso', 'fold2', 'ribbonLine'], null],
   [['vertLineTri', 'lineIsoTri', 'corrLineTri', 'rulers'], null],
   [['isoChain', 'vertLineTri', 'isoChain', 'lineIsoTri', 'rulers', 'corrLineTri'], null],
+  // むずかしい（式は 出ない。じぶんで 計算する）
+  [['squareIso', 'pentaIn', 'star', 'isoChain', 'squareIso', 'pentaIn', 'star'], null, true],
+  [['isoChain5', 'pentaInLong', 'starLine', 'squareIso', 'isoChain5', 'pentaInLong', 'starLine'], null, true],
 ];
 KD_MAKE.parallelC = () => KD_MAKE.parallel('corresponding');
 KD_MAKE.parallelA = () => KD_MAKE.parallel('alternate');
 const KD_ALL = Object.keys(KD.tech);
 UNITS.kakudo = {
   questions({ stage = 0 } = {}) {
-    const [pool, techs] = KD_STAGES[stage];
+    const [pool, techs, hard] = KD_STAGES[stage];
     // なかまを まぜた 列を くりかえして 8もん（となりに おなじ かたちが こない）
     const kinds = [];
     while (kinds.length < 8) {
@@ -678,7 +858,7 @@ UNITS.kakudo = {
     }
     return kinds.slice(0, 8).map((kind, i) => {
       const fig = kdPlace(KD_MAKE[kind]());
-      return { kind, stage, techs: techs || KD_ALL, ...fig, label: `かくど ${stage + 1}-${i + 1}` };
+      return { kind, stage, hard: !!hard, techs: techs || KD_ALL, ...fig, label: `かくど ${stage + 1}-${i + 1}` };
     });
   },
 
@@ -707,7 +887,7 @@ UNITS.kakudo = {
       const val = q.angles[m.result].val;
       steps.push({
         kind: 'answer', move: k, expected: val, unit: '°',
-        before: m.formula ? `${m.formula} =` : '',
+        before: m.formula && !q.hard ? `${m.formula} =` : '',
         prompt: m.result === 'x' ? `「？」は ${rb('何', 'なん')}${rb('度', 'ど')}？` : `□の ${rb('角', 'かく')}は ${rb('何', 'なん')}${rb('度', 'ど')}？`,
       });
     });
@@ -730,7 +910,10 @@ UNITS.kakudo = {
     };
     const mid = (an) => kdAng(an.v, an.a) + ((kdAng(an.v, an.b) - kdAng(an.v, an.a) + 360) % 360) / 2;
     // 角の 大きさに あわせて 弧の 半径（小さい 角は 大きく、ラベルが はみださない）
-    const radius = (an) => (an.val < 40 ? 44 : an.val < 70 ? 34 : 28);
+    const baseR = (an) => (an.val < 40 ? 44 : an.val < 70 ? 34 : 28);
+    // おなじ 頂点に 見える 角が いくつも ある ときは、大きい 角ほど 弧を 大きく（ラベルが かさならない）
+    let rank = new Map();
+    const radius = (an) => rank.get(an) || baseR(an);
 
     view.layout = () => {};
     view.draw = () => {
@@ -748,6 +931,24 @@ UNITS.kakudo = {
       svg.setAttribute('viewBox', '0 0 400 300');
       svg.setAttribute('class', 'kd-svg');
       let html = '';
+      // 見えている 角を 頂点ごとに ならべて、小さい じゅんに 内がわから
+      rank = new Map();
+      const shown = Object.entries(q.angles).filter(([id, an]) => view.known.has(id) || an.state === 'target' || id === view.cur || view.selected.has(id)).map(([, an]) => an);
+      // 頂点ごとに 小さい 角から じゅんに、まえの 弧より 26 そとがわへ
+      const groups = new Map();
+      for (const an of shown) {
+        const key = `${Math.round(an.v[0])},${Math.round(an.v[1])}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(an);
+      }
+      for (const list of groups.values()) {
+        list.sort((a, b) => a.val - b.val);
+        let r = 0;
+        for (const an of list) {
+          r = r ? Math.max(baseR(an), r + 26) : baseR(an);
+          rank.set(an, r);
+        }
+      }
       // 角の いろ（線の 下）
       for (const [id, an] of Object.entries(q.angles)) {
         const r = radius(an);
@@ -850,6 +1051,7 @@ UNITS.kakudo = {
     `${rb('三角形', 'さんかくけい')}・${rb('四角形', 'しかくけい')}`, 'スリッパ・ブーメラン',
     `${rb('平行線', 'へいこうせん')}`, `とくべつな ${rb('形', 'かたち')}`, `ちょうちょ${rb('形', 'がた')}・${rb('折', 'お')}りかえし`,
     `2${rb('手', 'て')}で とこう`, `3${rb('手', 'て')}で とこう`, `4${rb('手', 'て')} チャレンジ`,
+    `むずかしい ${rb('問題', 'もんだい')}`, `${rb('入試', 'にゅうし')}レベル`,
   ];
   const descs = [
     `180°・360°・${rb('向', 'む')}かい${rb('合', 'あ')}う ${rb('角', 'かく')}`,
@@ -857,6 +1059,8 @@ UNITS.kakudo = {
     `${rb('同位角', 'どういかく')}・${rb('錯角', 'さっかく')}・くの${rb('字', 'じ')}`, `${rb('二等辺三角形', 'にとうへんさんかくけい')}・${rb('正三角形', 'せいさんかくけい')}・${rb('正方形', 'せいほうけい')}・${rb('正多角形', 'せいたかくけい')}`,
     `${rb('対頂角', 'たいちょうかく')}の ${rb('利用', 'りよう')}・${rb('折', 'お')}り${rb('目', 'め')}`,
     'わざを 2つ つなぐ', 'わざを 3つ つなぐ（三角定規も）', 'AB＝BC＝CD など',
+    `${rb('星形', 'ほしがた')}・${rb('正五角形', 'せいごかくけい')}と ${rb('正三角形', 'せいさんかくけい')}・${rb('正方形', 'せいほうけい')}の ${rb('中', 'なか')}（${rb('式', 'しき')}なし）`,
+    `5〜6${rb('手', 'て')}・AB＝BC＝CD＝DE（${rb('式', 'しき')}なし）`,
   ];
   const at = LEVELS.findIndex((l) => l.type === 'free');
   LEVELS.splice(at < 0 ? LEVELS.length : at, 0, ...KD_STAGES.map((_, i) => ({
