@@ -2,24 +2,28 @@
 //   ・ぜんぶ たまごから。「べんきょうした ひ」の かずで つぎの すがたに かわる（たまご → … → おとな）
 //   ・えさ：すがたに よって ちがう（オタマジャクシは ゆでた ほうれんそう、カエルは コオロギ など）。
 //           たまごの あいだは いらない。5にち もらえないと しんでしまう
-//   ・ばしょ：たらい（カエル）→ にわの いけ（カエル・カメ）→ せせらぎ（オオサンショウウオ）
-//   ・え は SVG（2D）。Blender の モデルは まだ つかわない
+//   ・ばしょ：1つの 大きな ビオトープを ポイントで すこしずつ ひろげる
+//     しっち（はじめから・カエル）→ 大きな いけ（カメ）・もりと もくどう → わき水と すいしゃ（オオサンショウウオ）
+//   ・え は 3D（bio3d.js、Blender の models/bio_*.glb）。つかえない ときは SVG の 2D
 //
 // ほぞん（localStorage: mathapp.v1.bio.<こどもの id>）
-//   places  [{ id, type }]
-//   animals [{ id, species, placeId, since, stage, stageStart, fedDays, starve, fed, seed }]
+//   areas   ['wet', 'pond', ...]（ひろげた ところ）
+//   animals [{ id, species, since, stage, stageStart, fedDays, starve, fed, seed }]
 //   inv     { kusa, mushi, kame, sakana }
 //   simDay・zukan { しゅるい: { count, raised, first } }・graves・welcome
 
 const bioKey = (id) => `mathapp.v1.bio.${id}`;
 const BIO_STARVE = 5;
 
-// ばしょ：cap（なんびき まで）、allow（すめる いきもの）
-const BIO_PLACES = {
-  tarai: { name: 'たらいビオトープ', icon: '🪣', price: 0, cap: 6, allow: ['kaeru'], desc: 'みずくさと いしの ちいさな ビオトープ。カエルが そだつ' },
-  ike: { name: 'にわの いけ', icon: '🪷', price: 800, cap: 10, allow: ['kaeru', 'kame'], desc: 'りくと ひなたぼっこの いわが ある いけ。カメも すめる' },
-  sawa: { name: 'せせらぎ', icon: '🏞️', price: 2500, cap: 2, allow: ['sansho'], desc: 'つめたくて きれいな ながれ。オオサンショウウオの ための ばしょ' },
+// ひろげる ところ：cap（ふえる かず）、allow（すめる いきもの）、need（さきに ひろげる ところ）
+const BIO_AREAS = {
+  wet: { name: 'しっち', icon: '🌾', price: 0, cap: 6, allow: ['kaeru'], desc: 'あさい みずたまりと ヨシ・アヤメ。カエルが そだつ' },
+  pond: { name: '大きな いけ', icon: '🪷', price: 800, cap: 6, allow: ['kame'], desc: 'スイレンと まるた、すなはまの ある いけ。カメが すめる' },
+  forest: { name: 'もりと もくどう', icon: '🌳', price: 600, cap: 3, allow: [], desc: 'おくに 大きな き、しっちに もくどう。いきものが ふえる' },
+  stream: { name: 'わき水と すいしゃ', icon: '🏞️', price: 2500, cap: 3, allow: ['sansho'], need: 'pond', desc: 'つめたい わき水の せせらぎと すいしゃ、いわの す。オオサンショウウオの ばしょ' },
 };
+const bioCap = (data = bio.data) => data.areas.reduce((n, k) => n + BIO_AREAS[k].cap, 0);
+const needArea = (species) => Object.keys(BIO_AREAS).find((k) => BIO_AREAS[k].allow.includes(species));
 
 // えさ
 const BIO_FOODS = {
@@ -70,17 +74,29 @@ const BIO = {
   },
 };
 
-const bio = { data: null, placeId: null, selected: null, scene: null, shopTab: 'egg' };
+const bio = { data: null, selected: null, scene: null, shopTab: 'egg' };
 
 // ---------- データ ----------
 
 function loadBioData(profileId) {
   const s = readJSON(bioKey(profileId), null);
-  if (s) return s;
+  if (s) {
+    // まえの かたち（たらい・いけ・せせらぎ の 3つの ばしょ）から
+    if (!s.areas) {
+      const set = new Set(['wet']);
+      for (const p of s.places || []) {
+        if (p.type === 'ike') set.add('pond');
+        if (p.type === 'sawa') { set.add('pond'); set.add('stream'); }
+      }
+      s.areas = [...set];
+      delete s.places;
+    }
+    return s;
+  }
   const today = todayKey();
   const data = {
-    seq: 2, places: [{ id: 'b1', type: 'tarai' }],
-    animals: [newAnimal('a1', 'kaeru', 'b1', today), newAnimal('a2', 'kaeru', 'b1', today)],
+    seq: 2, areas: ['wet'],
+    animals: [newAnimal('a1', 'kaeru', today), newAnimal('a2', 'kaeru', today)],
     inv: { kusa: 6, mushi: 4, kame: 0, sakana: 0 },
     simDay: dayBefore(today), zukan: {}, graves: [], welcome: true,
   };
@@ -88,8 +104,8 @@ function loadBioData(profileId) {
   return data;
 }
 
-function newAnimal(id, species, placeId, today) {
-  return { id, species, placeId, since: today, stage: 0, stageStart: today, fedDays: [], starve: 0, fed: null, seed: Math.floor(Math.random() * 1e9) };
+function newAnimal(id, species, today) {
+  return { id, species, since: today, stage: 0, stageStart: today, fedDays: [], starve: 0, fed: null, seed: Math.floor(Math.random() * 1e9) };
 }
 
 function saveBioData() {
@@ -101,7 +117,7 @@ function noteBio(data, species, day) {
   z.count++;
 }
 
-const animalsIn = (placeId, data = bio.data) => data.animals.filter((a) => a.placeId === placeId);
+
 const stageOf = (a) => BIO[a.species].stages[a.stage];
 const bioFedToday = (a) => a.fed === todayKey();
 
@@ -178,7 +194,6 @@ function openBio() {
   bio.data = loadBioData(profile.id);
   const events = [...growBio(bio.data, studyDayList(profile.id)), ...simulateBioDays(bio.data)];
   saveBioData();
-  if (!bio.data.places.some((p) => p.id === bio.placeId)) bio.placeId = bio.data.places[0].id;
   bio.selected = null;
   $('bio-who').textContent = profile.name;
   show('bio');
@@ -187,7 +202,7 @@ function openBio() {
   if (bio.data.welcome) {
     bio.data.welcome = false;
     saveBioData();
-    notice('ようこそ ビオトープへ！ たらいビオトープと アマガエルの たまご 2つ、ほうれんそう 6こ、コオロギ 4こ を プレゼント 🎁<br>べんきょうした ひが ふえると、たまごが オタマジャクシ → カエルへと そだつよ');
+    notice('ようこそ ビオトープへ！ しっちと アマガエルの たまご 2つ、ほうれんそう 6こ、コオロギ 4こ を プレゼント 🎁<br>べんきょうした ひが ふえると、たまごが オタマジャクシ → カエルへと そだつよ。<br>ポイントで いけや せせらぎを ひろげると、カメや オオサンショウウオも そだてられるよ');
   } else if (events.length) {
     notice(events.join('<br><br>'));
   }
@@ -197,41 +212,56 @@ function closeBio() {
   setExpanded('bio', false);
   if (bio.scene) bio.scene.dispose();
   bio.scene = null;
+  $('bio-view').querySelectorAll('canvas, svg').forEach((c) => c.remove());
   renderHome();
 }
 
-const currentPlace = () => bio.data.places.find((p) => p.id === bio.placeId);
+const sceneAnimals = () => bio.data.animals.map((a) => ({ id: a.id, species: a.species, stage: a.stage, key: stageOf(a).key }));
 
-function mountBioScene() {
+// 3D（bio3d.js）。つかえない ときは SVG の 2D
+async function mountBioScene() {
   if (bio.scene) bio.scene.dispose();
-  bio.scene = createBioScene($('bio-view'), currentPlace().type, (id) => {
+  bio.scene = null;
+  const box = $('bio-view');
+  $('bio-msg').textContent = 'よみこみちゅう…';
+  $('bio-msg').style.display = '';
+  const onSelect = (id) => {
     bio.selected = id;
     renderBioInfo();
-  });
-  bio.scene.setAnimals(animalsIn(bio.placeId));
-  bio.scene.select(bio.selected);
+  };
+  try {
+    if (/[?&]flat=1/.test(location.search)) throw new Error('flat');
+    const mod = await import('./bio3d.js');
+    if (!$('bio').classList.contains('active')) return;
+    const sc = mod.createBiotope(box, { onSelect });
+    bio.scene = sc;
+    sc.setAreas(bio.data.areas);
+    sc.setAnimals(sceneAnimals());
+    await Promise.race([sc.ready, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 15000))]);
+    $('bio-msg').style.display = 'none';
+    return;
+  } catch (e) {
+    if (bio.scene) bio.scene.dispose();
+    bio.scene = null;
+  }
+  if (!$('bio').classList.contains('active')) return;
+  $('bio-msg').style.display = 'none';
+  const flat = createBioScene(box, bio.data.areas.includes('stream') ? 'sawa' : bio.data.areas.includes('pond') ? 'ike' : 'tarai', onSelect);
+  bio.scene = { ...flat, flat: true, setAreas() {}, overview() {} };
+  bio.scene.setAnimals(bio.data.animals);
 }
 
-function switchPlace(id) {
-  bio.placeId = id;
-  bio.selected = null;
-  renderBio();
-  mountBioScene();
+function syncBioScene() {
+  if (!bio.scene) return;
+  bio.scene.setAreas(bio.data.areas);
+  bio.scene.setAnimals(bio.scene.flat ? bio.data.animals : sceneAnimals());
 }
 
 function renderBio() {
   $('bio-points').innerHTML = `⭐ <b>${pointsText(loadWallet(currentProfile().id).points)}</b> pt`;
-  const tabs = $('place-tabs');
-  tabs.innerHTML = '';
-  for (const p of bio.data.places) {
-    const P = BIO_PLACES[p.type];
-    const danger = animalsIn(p.id).some((a) => bioMood(a).danger);
-    const b = document.createElement('button');
-    b.className = 'case-tab' + (p.id === bio.placeId ? ' active' : '') + (danger ? ' danger' : '');
-    b.textContent = `${danger ? '⚠️ ' : ''}${P.icon} ${P.name}（${animalsIn(p.id).length}/${P.cap}）`;
-    b.addEventListener('click', () => switchPlace(p.id));
-    tabs.appendChild(b);
-  }
+  // ひろげた ところ（まだの ところは 🔒）
+  $('place-tabs').innerHTML = Object.entries(BIO_AREAS).map(([k, A]) =>
+    `<span class="case-tab area-chip${bio.data.areas.includes(k) ? ' active' : ' locked'}">${bio.data.areas.includes(k) ? A.icon : '🔒'} ${A.name}</span>`).join('');
   $('binventory').innerHTML = Object.entries(BIO_FOODS)
     .map(([k, f]) => `<span class="inv-item" title="${f.name}">${f.icon} ${f.short} <b>${bio.data.inv[k] || 0}</b></span>`).join('');
   renderBioInfo();
@@ -239,15 +269,15 @@ function renderBio() {
 
 function renderBioInfo() {
   const el = $('bio-info');
-  const p = currentPlace();
-  const P = BIO_PLACES[p.type];
   const a = bio.data.animals.find((x) => x.id === bio.selected);
   if (!a) {
-    const list = animalsIn(p.id);
+    const list = bio.data.animals;
     const hungry = list.filter((x) => stageOf(x).food && !bioFedToday(x)).length;
+    const next = Object.entries(BIO_AREAS).find(([k]) => !bio.data.areas.includes(k));
     el.innerHTML = `
-      <div class="info-title">${P.icon} ${P.name}</div>
-      <div class="info-sub">${P.desc}（${list.length}/${P.cap}ひき）</div>
+      <div class="info-title">🐸 ビオトープ <small>${list.length}/${bioCap()}ひき</small></div>
+      <div class="info-sub">${bio.data.areas.map((k) => BIO_AREAS[k].name).join('・')}</div>
+      ${next ? `<div class="info-need">つぎは おみせの「ひろげる」で ${next[1].icon} ${next[1].name}（${next[1].price}pt）</div>` : ''}
       <div class="info-sub">${list.length ? 'いきものを タップすると くわしく みられるよ' : 'まだ だれも いないよ。おみせで たまごを かおう'}</div>
       <ul class="case-list">${list.map((x) => {
         const m = bioMood(x);
@@ -280,7 +310,7 @@ function renderBioInfo() {
     <button class="small-btn info-back">← いちらん</button>`;
   el.querySelector('.info-back').addEventListener('click', () => {
     bio.selected = null;
-    if (bio.scene) bio.scene.select(null);
+    if (bio.scene) { bio.scene.select(null); bio.scene.overview(); }
     renderBioInfo();
   });
 }
@@ -289,7 +319,7 @@ function feedBio() {
   const missing = {};
   let fed = 0, eggs = 0;
   const today = todayKey();
-  for (const a of animalsIn(bio.placeId)) {
+  for (const a of bio.data.animals) {
     const kind = stageOf(a).food;
     if (!kind) { eggs++; continue; }
     if (bioFedToday(a)) continue;
@@ -307,8 +337,8 @@ function feedBio() {
   if (fed && bio.scene) bio.scene.feed();
   const lacks = Object.entries(missing).map(([k, n]) => `${BIO_FOODS[k].name} ${n}こ`);
   if (lacks.length) toast(`${fed ? `${fed}ひきに あげたよ。` : ''}${lacks.join('、')} が たりない！ おみせで かおう`);
-  else if (!animalsIn(bio.placeId).length) toast('まだ だれも いないよ');
-  else if (!fed && eggs && eggs === animalsIn(bio.placeId).length) toast('たまごは まだ えさを たべないよ 🥚');
+  else if (!bio.data.animals.length) toast('まだ だれも いないよ');
+  else if (!fed && eggs && eggs === bio.data.animals.length) toast('たまごは まだ えさを たべないよ 🥚');
   else toast(fed ? `${fed}ひきに えさを あげたよ 😋` : 'きょうの えさは もう あげたよ');
   renderBio();
 }
@@ -322,19 +352,26 @@ function openBioShop(tab) {
   document.querySelectorAll('.bshop-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === bio.shopTab));
   const rows = [];
   if (bio.shopTab === 'egg') {
+    const full = bio.data.animals.length >= bioCap();
     for (const [k, sp] of Object.entries(BIO)) {
-      const home = bio.data.places.find((p) => BIO_PLACES[p.type].allow.includes(k));
-      const need = Object.values(BIO_PLACES).find((P) => P.allow.includes(k));
+      const area = needArea(k);
+      const ok = bio.data.areas.includes(area);
       rows.push(shopRow({
-        icon: sp.icon, name: `${sp.name}の たまご`, price: sp.price, points, locked: !home,
-        desc: home ? `${sp.stages.map((s) => s.name).join(' → ')}` : `🔒 ${need.name}が ひつよう`,
+        icon: sp.icon, name: `${sp.name}の たまご`, price: sp.price, points, locked: !ok || full,
+        desc: !ok ? `🔒「${BIO_AREAS[area].name}」を ひろげると かえる` : full ? `🔒 いっぱい（${bioCap()}ひき）。ばしょを ひろげよう` : `${sp.stages.map((st) => st.name).join(' → ')}`,
         action: `egg:${k}`,
       }));
     }
   } else if (bio.shopTab === 'place') {
-    for (const [k, P] of Object.entries(BIO_PLACES)) {
-      if (!P.price) continue;
-      rows.push(shopRow({ icon: P.icon, name: P.name, price: P.price, points, desc: `${P.desc}（${P.cap}ひき まで）`, action: `place:${k}` }));
+    for (const [k, A] of Object.entries(BIO_AREAS)) {
+      if (!A.price) continue;
+      const has = bio.data.areas.includes(k);
+      const needs = A.need && !bio.data.areas.includes(A.need);
+      rows.push(shopRow({
+        icon: A.icon, name: A.name, price: A.price, points, locked: has || needs,
+        desc: has ? '✅ もう ひろげた' : needs ? `🔒 さきに「${BIO_AREAS[A.need].name}」を ひろげよう` : `${A.desc}（+${A.cap}ひき）`,
+        action: `place:${k}`,
+      }));
     }
   } else {
     for (const [k, f] of Object.entries(BIO_FOODS)) {
@@ -359,37 +396,36 @@ function buyBio(action) {
     return;
   }
   if (kind === 'place') {
-    const P = BIO_PLACES[key];
-    confirmDialog(`${P.name}を ${P.price}pt で かう？`, () => {
-      if (!spendPoints(P.price, `bioplace:${key}`)) return;
-      const id = `b${++bio.data.seq}`;
-      bio.data.places.push({ id, type: key });
+    const A = BIO_AREAS[key];
+    confirmDialog(`${A.name}を ${A.price}pt で ひろげる？`, () => {
+      if (!spendPoints(A.price, `bioarea:${key}`)) return;
+      bio.data.areas.push(key);
       saveBioData();
       $('bshop').classList.add('hidden');
-      switchPlace(id);
-      toast(`${P.name}が できた！`);
-    });
+      renderBio();
+      syncBioScene();
+      toast(`${A.icon} ${A.name}が できた！`);
+    }, 'ひろげる！');
     return;
   }
   const sp = BIO[key];
-  const fits = (p) => BIO_PLACES[p.type].allow.includes(key) && animalsIn(p.id).length < BIO_PLACES[p.type].cap;
-  const target = fits(currentPlace()) ? currentPlace() : bio.data.places.find(fits);
-  if (!target) {
-    toast('いれられる ばしょが いっぱいだよ。ばしょを ふやそう');
+  if (!bio.data.areas.includes(needArea(key)) || bio.data.animals.length >= bioCap()) {
+    toast('いまは いれられないよ。ばしょを ひろげよう');
     return;
   }
   confirmDialog(`${sp.name}の たまごを ${sp.price}pt で かう？`, () => {
     if (!spendPoints(sp.price, `bio:${key}`)) return;
     const today = todayKey();
     const id = `a${++bio.data.seq}`;
-    bio.data.animals.push(newAnimal(id, key, target.id, today));
+    bio.data.animals.push(newAnimal(id, key, today));
     noteBio(bio.data, key, today);
     saveBioData();
     $('bshop').classList.add('hidden');
     bio.selected = id;
-    if (target.id !== bio.placeId) switchPlace(target.id);
-    else { renderBio(); bio.scene.setAnimals(animalsIn(bio.placeId)); bio.scene.select(id); }
-    toast(`${sp.name}の たまごが きた！ ${BIO_PLACES[target.type].name}に いるよ`);
+    renderBio();
+    syncBioScene();
+    if (bio.scene) bio.scene.select(id);
+    toast(`${sp.name}の たまごが きた！`);
   });
 }
 
@@ -431,7 +467,7 @@ function showBioDetail(k) {
     return;
   }
   const pics = sp.stages.map((s) => `<div class="bio-pic"><svg viewBox="-60 -40 120 80">${bioDraw(k, s.key, 0, 0)}</svg><span>${s.name}</span></div>`).join('');
-  const P = Object.values(BIO_PLACES).find((x) => x.allow.includes(k));
+  const P = BIO_AREAS[needArea(k)];
   el.innerHTML = `
     <div class="info-title">${sp.icon} ${sp.name}</div>
     <div class="bio-pics">${pics}</div>
@@ -442,7 +478,7 @@ function showBioDetail(k) {
       <dt>すんでいる ところ</dt><dd>${sp.lives}</dd>
       <dt>たべもの</dt><dd>${sp.eats}</dd>
       <dt>まめちしき</dt><dd>${sp.trivia}</dd>
-      <dt>この アプリでは</dt><dd>${P.name}で そだつ。おとなまで べんきょうした ひ ${sp.stages.reduce((n, s) => n + (s.days || 0), 0)}にち</dd>
+      <dt>この アプリでは</dt><dd>「${P.name}」で そだつ。おとなまで べんきょうした ひ ${sp.stages.reduce((n, s) => n + (s.days || 0), 0)}にち</dd>
     </dl>
     <button class="small-btn" id="bzukan-back">← おもいで</button>`;
   $('bzukan-back').addEventListener('click', () => showBioDetail(null));

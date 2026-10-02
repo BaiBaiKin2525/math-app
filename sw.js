@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v46';
+const VERSION = 'v47';
 const FILES = [
   './',
   'index.html',
@@ -32,6 +32,10 @@ const FILES = [
   'pet3d.js',
   'fish.js',
   'biotope.js',
+  'bio3d.js',
+  'models/bio_terrain.glb',
+  'models/bio_props.glb',
+  'models/bio_animals.glb',
   'fish3d.js',
   'models/medaka.glb',
   'models/himedaka.glb',

@@ -27,6 +27,10 @@ const MODELS = [
   ...['kabuto', 'kanabun', 'kokuwa', 'nokogiri', 'miyama', 'ookuwa', 'ant', 'dango', 'larva', 'pupa'].map((n) => ['blender/insects.py', `bug_${n}`, [n]]),
   // こまかく つくる もの：がぞうを 1024 の まま のこす
   ...['caucasus', 'hercules'].map((n) => ['blender/insects.py', `bug_${n}`, [n], { tex: 1024 }]),
+  // ビオトープ（blender/biotope.py）
+  ['blender/biotope.py', 'bio_terrain', ['terrain'], { tex: 2048 }],
+  ['blender/biotope.py', 'bio_props', ['props']],
+  ['blender/biotope.py', 'bio_animals', ['animals']],
 ];
 
 const only = process.argv[2];
