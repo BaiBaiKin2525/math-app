@@ -124,7 +124,58 @@
     </div>
   </section>
 
+  <section id="bio" class="screen">
+    <header class="quiz-bar">
+      <button id="bio-back" class="small-btn">← もどる</button>
+      <div class="pets-title">🐸 <span id="bio-who"></span> の ビオトープ</div>
+      <div id="bio-points" class="points-chip"></div>
+    </header>
+    <div id="place-tabs" class="case-tabs"></div>
+    <div class="pets-body">
+      <div id="bio-view" class="room3d bio-view"><button class="expand-btn" data-screen="bio">⛶ おおきく</button></div>
+      <div class="pets-side">
+        <div id="bio-info" class="pet-info"></div>
+        <div class="pets-actions">
+          <button id="bfeed-btn" class="big-btn orange">🥬 えさを あげる</button>
+          <button id="bshop-btn" class="big-btn green">🛒 おみせ</button>
+          <button id="bzukan-btn" class="big-btn purple">📖 ずかん</button>
+        </div>
+        <div id="binventory" class="inventory"></div>
+      </div>
+    </div>
+  </section>
+
   <div id="toast" class="toast"></div>
+
+  <div id="bshop" class="overlay hidden">
+    <div class="sheet">
+      <div class="sheet-head">
+        <b>🛒 ビオトープの おみせ</b>
+        <span id="bshop-points" class="points-chip"></span>
+        <button id="bshop-close" class="small-btn">とじる</button>
+      </div>
+      <div class="shop-tabs">
+        <button class="shop-tab bshop-tab" data-tab="egg">たまご</button>
+        <button class="shop-tab bshop-tab" data-tab="place">ばしょ</button>
+        <button class="shop-tab bshop-tab" data-tab="food">えさ</button>
+      </div>
+      <div id="bshop-list" class="shop-list"></div>
+    </div>
+  </div>
+
+  <div id="bzukan" class="overlay hidden">
+    <div class="sheet wide">
+      <div class="sheet-head">
+        <b>📖 ビオトープの ずかん</b>
+        <span id="bzukan-count" class="zukan-count"></span>
+        <button id="bzukan-close" class="small-btn">とじる</button>
+      </div>
+      <div class="zukan-body">
+        <div id="bzukan-grid" class="zukan-grid"></div>
+        <div id="bzukan-detail" class="zukan-detail"></div>
+      </div>
+    </div>
+  </div>
 
   <div id="fshop" class="overlay hidden">
     <div class="sheet">
@@ -254,6 +305,7 @@
   <script src="flatroom.js"></script>
   <script src="pets.js"></script>
   <script src="fish.js"></script>
+  <script src="biotope.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

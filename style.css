@@ -1208,3 +1208,25 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 .kd-seg.dash { stroke: #9a9088; stroke-width: 2.5; stroke-dasharray: 7 6; }
 .kd-fill { fill: #ffe9a8; opacity: .55; }
 .kd-right { fill: none; stroke: #3a3530; stroke-width: 2; }
+
+/* ビオトープ */
+.bio-btn { background: #e9f7e3; border-color: #9fd18a; color: #2f6b1f; }
+.bio-view { background: #cfe8c4; overflow: hidden; }
+.bio-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.bio-actor { cursor: pointer; }
+.bio-crumb { fill: #6aa84f; stroke: #3f7a2c; stroke-width: 1; animation: bio-sink 2.5s ease-in forwards; }
+@keyframes bio-sink { to { transform: translateY(18px); opacity: 0; } }
+.sway { transform-box: fill-box; transform-origin: 50% 100%; animation: bio-sway 3.2s ease-in-out infinite alternate; }
+.sway.s1 { animation-duration: 2.7s; } .sway.s2 { animation-duration: 3.8s; }
+@keyframes bio-sway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.flow { animation: bio-flow 3s linear infinite; }
+.flow.f1 { animation-delay: -1s; } .flow.f2 { animation-delay: -2s; }
+@keyframes bio-flow { from { transform: translateX(-40px); opacity: 0; } 30% { opacity: .7; } to { transform: translateX(160px); opacity: 0; } }
+.bio-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; font-size: 13px; }
+.bio-chain i { color: #b9ab92; font-style: normal; }
+.bio-step { padding: 2px 8px; border-radius: 10px; background: #eee6d6; color: #8a7f6c; }
+.bio-step.done { background: #e3f4e0; color: #3f7a2c; }
+.bio-step.now { background: #ffe7b0; color: #8a5a00; font-weight: 700; }
+.bio-pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 8px 0; }
+.bio-pic { display: flex; flex-direction: column; align-items: center; background: #f1f8ee; border-radius: 12px; padding: 6px; font-size: 12px; text-align: center; }
+.bio-pic svg { width: 100%; height: 70px; }
