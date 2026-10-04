@@ -8,6 +8,20 @@ const HISTORY_KEY = 'mathapp.v1.history';
 const MAX_DIGITS = 4;
 const OPS = { add: '+', sub: '−', mul: '×', mul2: '×', addn: '+', kukuhyo: '', kufu: '+' };
 
+// タイルを つかう か どうか（こどもごと・けいさんの しゅるいごと）。なれたら「なし」で こたえだけ いれる
+const TILE_TYPES = ['add', 'sub', 'mul', 'mul2', 'addn'];
+const tilesOffKey = () => `mathapp.v1.tilesOff.${currentProfile().id}`;
+function tilesOff(type = state.level && state.level.type) {
+  if (!TILE_TYPES.includes(type)) return false;
+  if (type === 'addn' && state.level && state.level.tiles === false) return true;   // もともと ひっさん だけ
+  return !!readJSON(tilesOffKey(), {})[type];
+}
+function setTilesOff(type, off) {
+  const m = readJSON(tilesOffKey(), {});
+  m[type] = off;
+  writeJSON(tilesOffKey(), m);
+}
+
 const state = {
   level: null,
   questions: [],
@@ -271,6 +285,10 @@ function renderHome() {
 function buildSteps(type, q) {
   if (UNITS[type]) return UNITS[type].steps(q);
   const { a, b } = q;
+  if (tilesOff(type) && type !== 'addn') {
+    const expected = { add: a + b, sub: a - b, mul: a * b, mul2: a * b }[type];
+    return [{ kind: 'answer', expected }];
+  }
   switch (type) {
     case 'add':
       return [{ kind: 'answer', expected: a + b }];
@@ -351,6 +369,11 @@ function mountVisual() {
   disposeView();
   box.innerHTML = '';
   box.classList.toggle('hidden', state.hideVisual && canHide(type));
+  if (tilesOff(type) && type !== 'addn') {
+    box.classList.add('hidden');
+    state.view = { draw() {}, layout() {} };
+    return;
+  }
   if (UNITS[type]) {
     state.view = UNITS[type].view(box, q, unitApi);
   } else if (type === 'add' || type === 'sub') {
@@ -375,8 +398,8 @@ function disposeView() {
   state.view = null;
 }
 
-const hasTiles = () => state.level.tiles !== false;
-const canHide = (type) => type === 'add' || type === 'sub' || (type === 'addn' && hasTiles());
+const hasTiles = () => state.level.tiles !== false && !tilesOff('addn');
+const canHide = (type) => !tilesOff(type) && (type === 'add' || type === 'sub' || (type === 'addn' && hasTiles()));
 
 // みぎの ひっさん（タイルつきの おおきい かずの たしざん だけ。タイルなしは えの ばしょに おおきく かく）
 function renderSide() {
@@ -386,9 +409,15 @@ function renderSide() {
 }
 
 function setupTools(type) {
-  $('count-btn').style.display = ['add', 'sub', 'mul'].includes(type) ? '' : 'none';
-  $('merge-btn').style.display = type === 'add' ? '' : 'none';
+  const off = tilesOff(type);
+  $('count-btn').style.display = ['add', 'sub', 'mul'].includes(type) && !off ? '' : 'none';
+  $('merge-btn').style.display = type === 'add' && !off ? '' : 'none';
   $('hide-btn').style.display = canHide(type) ? '' : 'none';
+  // もともと ひっさん だけの レベルは きりかえ なし
+  const canToggle = TILE_TYPES.includes(type) && !(type === 'addn' && state.level.tiles === false);
+  $('tiles-btn').style.display = canToggle ? '' : 'none';
+  $('tiles-btn').textContent = off ? '🔢 タイル：なし' : '🧱 タイル：あり';
+  $('tiles-btn').classList.toggle('off', off);
   updateHideBtn();
 }
 
@@ -430,7 +459,7 @@ function enterStep() {
   if (unit && unit.enter) unit.enter(view, step, q);
   // タイルを とる あいだは えを かくさない
   $('visual').classList.toggle('hidden',
-    state.hideVisual && canHide(state.level.type) && step.kind !== 'remove');
+    (tilesOff() && state.level.type !== 'addn') || (state.hideVisual && canHide(state.level.type) && step.kind !== 'remove'));
 
   if (step.kind === 'pick-x') say(`よこの めもりを なぞって 「${q.a}」を えらぼう 👉`);
   else if (step.kind === 'pick-y') say(`たての めもりを なぞって 「${q.b}」を えらぼう 👇`);
@@ -786,6 +815,7 @@ const unitApi = {
 
 function hintText() {
   const type = state.level.type;
+  if (tilesOff(type) && type !== 'addn') return 'おしい！もういちど けいさんして みよう';
   if (type === 'add') return 'おしい！「がっちゃん」や「かぞえる」で たしかめよう';
   if (type === 'sub') return 'おしい！「かぞえる」で のこりを かぞえよう';
   if (type === 'mul') return 'おしい！「かぞえる」で たしかめよう';
@@ -866,7 +896,7 @@ async function checkAnswer() {
     view.reveal = step.reveal;
     view.draw();
   }
-  if (['add', 'sub', 'mul'].includes(state.level.type)) {
+  if (['add', 'sub', 'mul'].includes(state.level.type) && !tilesOff()) {
     await sleep(700);
     countAlong();
   }
@@ -949,6 +979,14 @@ $('count-btn').addEventListener('click', countAlong);
 $('merge-btn').addEventListener('click', () => {
   state.countToken++;
   state.view.merge();
+});
+// タイル あり／なし：きりかえて いまの もんだいを はじめから
+$('tiles-btn').addEventListener('click', () => {
+  const type = state.level.type;
+  setTilesOff(type, !tilesOff(type));
+  state.countToken++;
+  state.hideVisual = false;
+  showQuestion();
 });
 $('hide-btn').addEventListener('click', () => {
   state.hideVisual = !state.hideVisual;
