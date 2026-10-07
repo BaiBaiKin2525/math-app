@@ -228,6 +228,8 @@ function renderHome() {
   renderHomeBar();
   const root = $('level-groups');
   root.innerHTML = '';
+  // きょう もう やった もんだい（「きょう はじめて +5」を だす ため）
+  const todayLevels = (loadWallet(currentProfile().id).days[todayKey()] || {}).levels || [];
   const groups = [...new Set(LEVELS.map((l) => l.group))];
   const open = loadOpenGroups();
   for (const g of groups) {
@@ -262,6 +264,7 @@ function renderHome() {
       if (level.type !== 'free') {
         const r = pointRuleFor(level);
         ptText = r.net ? '⭐ せいかい − まちがい' : `⭐ 1もん ${r.per}pt${r.perfect ? `・ぜんぶ せいかい +${r.perfect}` : ''}`;
+        if (!todayLevels.includes(level.id)) ptText += `・🌅 きょう はじめて +${POINT_RULES.firstOfDay}`;
       }
       card.innerHTML = `
         <span class="t">${level.title}</span>

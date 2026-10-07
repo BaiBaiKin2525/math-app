@@ -5,7 +5,8 @@
 //   points      いま つかえる ポイント
 //   earnedTotal これまでに もらった ごうけい
 //   spentTotal  これまでに つかった ごうけい
-//   days        { 'YYYY-MM-DD': { earned: べんきょうで もらった ポイント, sets: おわった セット, goal: もくひょう たっせい } }
+//   days        { 'YYYY-MM-DD': { earned: べんきょうで もらった ポイント, sets: おわった セット, goal: もくひょう たっせい,
+//                                  levels: その ひ に やった もんだいの id（きょう はじめて ボーナス） } }
 //   streak      { last: さいごに もくひょうを たっせいした ひ, count: れんぞく にっすう }
 //   log         [{ date, amount, reason }]（あたらしい 300 けん）
 
@@ -22,6 +23,7 @@ const POINT_RULES = {
   dailyGoalBonus: 20,   // もくひょう たっせい（じょうげんの そと）
   streakPerDay: 2,      // れんぞく ボーナス ＝ にっすう × 2（2にちめから、じょうげんの そと）
   streakMax: 14,
+  firstOfDay: 5,        // その ひ はじめて やる もんだい（しゅるいごと）。いろいろな もんだいを やって ほしい
 };
 
 // もんだいの むずかしさで かわる ポイント
@@ -32,12 +34,7 @@ function pointRuleFor(level) {
   if (id === 'ta-order') return { per: 1, perfect: 0 };
   if (/^j\da?h-/.test(id)) return { per: 3, perfect: 10 };           // じゅけんの どだい チャレンジ
   if (/^j\d/.test(id)) return { per: 2, perfect: 10 };                // じゅけんの どだい（1年・2年）
-  if (level.type === 'mul2' || level.type === 'addn') return { per: 2, perfect: 5 };
-  if (level.type === 'mul') {
-    const dan = Number((id.match(/^mul(\d)$/) || [])[1]);
-    return dan && dan <= 5 ? { per: 1, perfect: 2 } : { per: 1, perfect: 5 }; // 1〜5のだんは かんたん
-  }
-  return { per: 1, perfect: 2 };                                       // たしざん・ひきざん
+  return { per: 2, perfect: 5 };                                       // たしざん・ひきざん・くく・おおきい かず など
 }
 
 function readJSON(key, fallback) {
@@ -163,6 +160,12 @@ function awardSet({ correct, total, full, level, wrong = 0 }) {
   if (rule.net) addStudy(`せいかい ${correct} − まちがい ${wrong}`, Math.max(0, correct - wrong));
   else addStudy(`せいかい ${correct}もん × ${rule.per}`, correct * rule.per);
   if (full && rule.perfect && total > 0 && correct === total) addStudy('ぜんもん せいかい', rule.perfect);
+  // きょう はじめて やる もんだい（しゅるいごと）
+  day.levels = day.levels || [];
+  if (full && level && !day.levels.includes(level.id)) {
+    day.levels.push(level.id);
+    addStudy('きょう はじめての もんだい', R.firstOfDay);
+  }
   day.earned += study;
   if (full) day.sets++;
 
