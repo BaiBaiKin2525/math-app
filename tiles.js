@@ -1,6 +1,6 @@
 // たしざん・ひきざんの タイル。タイルは 下から つみ、10 こで 1 本の「10 のぼう」になる。
 //   たしざん：「がっちゃん」で あわせると、10 こ そろった ところが ぼうに なる（くりあがり）
-//   ひきざん：タップで タイルを とる。ぼうから とると ぼうが ばらばらに なる（くりさがり）
+//   ひきざん：「がっちゃん」で まとめて とる（タップで 1こずつ とっても よい）。ぼうから とると ぼうが ばらばらに なる（くりさがり）
 
 function createTileView(box, type, q, { onRemoveDone }) {
   const total = type === 'add' ? q.a + q.b : q.a;
@@ -102,13 +102,28 @@ function createTileView(box, type, q, { onRemoveDone }) {
       if (!view.merged) return `<b class="a">■ ${q.a}こ</b> と <b class="b">■ ${q.b}こ</b>`;
       return total >= 10 ? '10 の ぼうが できた！' : 'あわせたよ';
     }
-    if (view.removed.size < q.b) return `${q.a}こ から <b class="a">${q.b}こ</b> とろう（${view.removed.size} / ${q.b}）`;
+    if (view.removed.size < q.b) return `${q.a}こ から <b class="a">${q.b}こ</b> とろう（${view.removed.size} / ${q.b}）。「がっちゃん」で まとめて とれるよ`;
     return 'のこりは いくつ？';
   }
 
   view.layout = () => view.draw();
 
-  view.merge = () => {
+  view.merge = async () => {
+    if (type === 'sub') {
+      // ひきざん：のこりの ぶんを ばらの タイルから じゅんに まとめて とる（たりなければ 10 の ぼうを ばらす）
+      if (view.locked) return;
+      view.locked = true;
+      const ids = range(0, total).reverse().filter((id) => !view.removed.has(id)).slice(0, q.b - view.removed.size);
+      for (const id of ids) {
+        if (id < 10 && total >= 10) view.broken = true;
+        view.removed.add(id);
+        view.draw();
+        soundTick();
+        await sleep(110);
+      }
+      onRemoveDone();
+      return;
+    }
     if (type !== 'add' || view.merged) return;
     view.merged = true;
     view.draw(true);

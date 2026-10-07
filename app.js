@@ -411,7 +411,7 @@ function renderSide() {
 function setupTools(type) {
   const off = tilesOff(type);
   $('count-btn').style.display = ['add', 'sub', 'mul'].includes(type) && !off ? '' : 'none';
-  $('merge-btn').style.display = type === 'add' && !off ? '' : 'none';
+  $('merge-btn').style.display = (type === 'add' || type === 'sub') && !off ? '' : 'none';
   $('hide-btn').style.display = canHide(type) ? '' : 'none';
   // もともと ひっさん だけの レベルは きりかえ なし
   const canToggle = TILE_TYPES.includes(type) && !(type === 'addn' && state.level.tiles === false);
@@ -463,7 +463,7 @@ function enterStep() {
 
   if (step.kind === 'pick-x') say(`よこの めもりを なぞって 「${q.a}」を えらぼう 👉`);
   else if (step.kind === 'pick-y') say(`たての めもりを なぞって 「${q.b}」を えらぼう 👇`);
-  else if (step.kind === 'remove') say(`タイルを タップして ${q.b}こ とろう`);
+  else if (step.kind === 'remove') say(`「🧲 がっちゃん」で ${q.b}こ まとめて とろう（タップで 1こずつ でも いいよ）`);
   else if (step.kind === 'find') say(`${step.targets.length > 1 ? `ぜんぶで ${step.targets.length}か${rb('所', 'しょ')} あるよ` : 'タップしてね'}`);
   else if (step.place !== undefined) say(`${PLACE_NAMES[step.place]}の くらいを たそう`);
   else if (step.region !== undefined) say('ひかっている へやは いくつ？');
