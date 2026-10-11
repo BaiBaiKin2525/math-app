@@ -1,5 +1,6 @@
 // くく タイムアタック：150 びょうで なんもん せいかい できるか。
 //   じゅんばん：1×1 → 1×2 → … → 9×9（おわったら 1×1 に もどる）
+//   ぎゃく じゅんばん：9×9 → 9×8 → … → 1×1（おわったら 9×9 に もどる）
 //   ランダム：ばらばらに でる
 
 const TA_SECONDS = 150;
@@ -21,6 +22,8 @@ const ta = {
 
 const TA_ORDER = [];
 for (let a = 1; a <= 9; a++) for (let b = 1; b <= 9; b++) TA_ORDER.push({ a, b });
+const TA_REVERSE = TA_ORDER.slice().reverse();
+const taInOrder = () => ta.level.mode === 'order' || ta.level.mode === 'reverse';
 
 function startTimeAttack(level) {
   stopTimeAttack();
@@ -33,7 +36,7 @@ function startTimeAttack(level) {
   $('ta-fill').style.width = '100%';
   $('ta-fill').className = 'ta-fill';
   $('ta-time').textContent = TA_SECONDS;
-  $('ta-score').textContent = level.mode === 'order' ? 'じゅんばん モード' : 'ランダム モード';
+  $('ta-score').textContent = { order: 'じゅんばん モード', reverse: 'ぎゃく じゅんばん モード' }[level.mode] || 'ランダム モード';
   $('ta-formula').className = 'formula mul';
   $('ta-formula').innerHTML = '<div class="formula-line ta-ready">150びょうで なんもん できるかな？</div>';
   $('ta-start').style.display = '';
@@ -67,8 +70,9 @@ function taTick() {
 }
 
 function taNext() {
-  if (ta.level.mode === 'order') {
-    ta.q = TA_ORDER[ta.pos % TA_ORDER.length];
+  if (taInOrder()) {
+    const list = ta.level.mode === 'reverse' ? TA_REVERSE : TA_ORDER;
+    ta.q = list[ta.pos % list.length];
     ta.pos++;
   } else {
     let q;
@@ -171,12 +175,12 @@ function taEnd() {
     level: ta.level.id, date: new Date().toISOString(),
     correct: ta.correct, wrong: ta.wrong, total: ta.correct, ms: TA_SECONDS * 1000,
   };
-  if (ta.level.mode === 'order') record.reached = `${ta.q.a}×${ta.q.b}`;
+  if (taInOrder()) record.reached = `${ta.q.a}×${ta.q.b}`;
   saveHistory(record);
 
   const isBest = !prevBest || ta.correct > prevBest.correct;
   $('result-mark').textContent = isBest && ta.correct > 0 ? '🏆' : '⏱️';
-  const reached = ta.level.mode === 'order' ? `・${ta.q.a} × ${ta.q.b} で タイムアップ` : '';
+  const reached = taInOrder() ? `・${ta.q.a} × ${ta.q.b} で タイムアップ` : '';
   $('result-text').innerHTML =
     `${ta.correct}もん せいかい！${isBest && ta.correct > 0 ? '<span class="new-record">しんきろく！</span>' : ''}` +
     `<small>まちがい ${ta.wrong}かい${reached}</small>`;

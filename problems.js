@@ -159,6 +159,10 @@ const LEVELS = [  {
     title: 'じゅんばん', desc: '1×1 から じゅんに。150びょう',
   },
   {
+    id: 'ta-reverse', type: 'ta', mode: 'reverse', group: 'くく タイムアタック',
+    title: 'ぎゃく じゅんばん', desc: '9×9 から ぎゃくに。150びょう',
+  },
+  {
     id: 'ta-random', type: 'ta', mode: 'random', group: 'くく タイムアタック',
     title: 'ランダム', desc: 'ばらばらに でる。150びょう',
   },
