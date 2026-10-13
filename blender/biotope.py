@@ -11,7 +11,7 @@
 #   ・terrain：terrain（じめん）、water_pond・water_stream・water_wet（みずめん）、
 #     cover_pond・cover_stream（まだ ひろげていない ところを くさで かくす ふた）
 #   ・props：world_*（その ばしょに おく もの）と、ならべる もの（tree0 など）。すいしゃは wheel_pivot を まわす
-#   ・animals：<しゅるい>_<すがた>。しっぽは tail（から）の したに あり、ゆらす
+#   ・animals：<しゅるい>_<すがた>。ふし（かんせつ）は <モデル>_j_<なまえ> の から。アプリが まわして うごかす
 
 import math
 import os
@@ -655,59 +655,203 @@ def build_props():
 
 
 # ---------- いきもの ----------
+# ふし（かんせつ）：<モデル>_j_<なまえ> の から（Empty）。その したの かたちは から の いちを もとに おく。
+#   アプリ（bio3d.js）が から を まわして あし・くび・のどを うごかす。R は x が ＋の がわ（あたまは ＋z）
+#   オタマジャクシ・オオサンショウウオの からだ（モデルの すぐ した の かたち）は、アプリが よこに くねらせる
+
+JW = {}          # から の なまえ → せかいの いち（アプリの ざひょう）
+
+
+def root_of(name):
+    e = empty(name)
+    JW[name] = np.zeros(3)
+    return e
+
+
+def joint(model, jname, pos, parent):
+    pos = np.asarray(pos, dtype=float)
+    e = empty(f'{model}_j_{jname}', tuple(pos - JW[parent.name]), parent)
+    JW[e.name] = pos
+    return e
+
+
+def part(name, b, mat, parent):
+    """b の かたちを parent（から）の いちを もとに して つける"""
+    off = JW[parent.name]
+    if np.any(off):
+        d = P(*off)
+        for v in b.bm.verts:
+            v.co.x -= d[0]
+            v.co.y -= d[1]
+            v.co.z -= d[2]
+    return obj(name, b.bm, mat, parent)
+
+
+def on_ell(c, r, elev, az, k=1.0):
+    """だえんたいの ひょうめんの 1てん（elev：うえ むき の かくど、az：＋z から ＋x へ の かくど）"""
+    e, a = math.radians(elev), math.radians(az)
+    return (c[0] + r[0] * math.cos(e) * math.sin(a) * k, c[1] + r[1] * math.sin(e) * k, c[2] + r[2] * math.cos(e) * math.cos(a) * k)
+
+
+def ell_pt(c, r, elev, az, deform=None, k=1.0):
+    """on_ell と おなじ だが、blob の deform も かける（すじ・もようを ひょうめんに のせる）"""
+    e, a = math.radians(elev), math.radians(az)
+    u = np.array([math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a)])
+    p = u * np.array(r)
+    if deform:
+        p = deform(u, p)
+    return tuple(np.array(c) + p * k)
+
+
+def loft(b, secs, ring=28, disp=None, steps=70):
+    """よこ だんめん（だえん）を z に そって つなぐ。secs：[(z, はば, うえの たかさ, したの たかさ, とがり)]
+    u：0＝おなか → 0.25＝＋x の よこ → 0.5＝せなか → 0.75＝−x の よこ、v：0＝しっぽの さき → 1＝はなさき"""
+    secs = sorted(secs, key=lambda s: s[0])
+    Z = np.array([s[0] for s in secs])
+    zs = np.linspace(Z[0], Z[-1], steps)
+    cols = [np.interp(zs, Z, [s[i] for s in secs]) for i in range(1, 5)]
+    rings = []
+    for i, z in enumerate(zs):
+        w, ht, hb, n = (c[i] for c in cols)
+        cy = hb + 0.004
+        vs = []
+        for j in range(ring):
+            u = j / ring
+            a = -math.pi / 2 + 2 * math.pi * u
+            ca, sa = math.cos(a), math.sin(a)
+            x = w * math.copysign(abs(ca) ** (2 / n), ca)
+            yy = (ht if sa > 0 else hb) * math.copysign(abs(sa) ** (2 / n), sa)
+            p = np.array([x, cy + yy, z])
+            if disp:
+                p = p + np.array([ca, sa * 0.8, 0.0]) * disp(u, (z - Z[0]) / (Z[-1] - Z[0]), z, a)
+            vs.append(b.bm.verts.new(P(*p)))
+        rings.append(vs)
+    vv = lambda i: i / (steps - 1)
+    for i in range(steps - 1):
+        for j in range(ring):
+            j2 = (j + 1) % ring
+            f = b.bm.faces.new((rings[i][j], rings[i][j2], rings[i + 1][j2], rings[i + 1][j]))
+            u1 = (j + 1) / ring
+            for lp, uv in zip(f.loops, [(vv(i), j / ring), (vv(i), u1), (vv(i + 1), u1), (vv(i + 1), j / ring)]):
+                lp[b.uv].uv = uv
+    for k, v0 in ((0, 0.0), (steps - 1, 1.0)):
+        c = np.mean([np.array(v.co) for v in rings[k]], axis=0)
+        cv = b.bm.verts.new(tuple(c))
+        for j in range(ring):
+            try:
+                f = b.bm.faces.new((rings[k][j], rings[k][(j + 1) % ring], cv))
+                for lp in f.loops:
+                    lp[b.uv].uv = (v0, 0.5)
+            except ValueError:
+                pass
+
+
+def toes(b, base, angles, lens, r=0.004, pad=0.0, y=0.006, rise=0.004):
+    """ゆび：base から angles（＋z から ＋x への かくど）の むきへ"""
+    for a, L in zip(angles, lens):
+        ar = math.radians(a)
+        tip = (base[0] + math.sin(ar) * L, y, base[2] + math.cos(ar) * L)
+        mid = ((base[0] + tip[0]) / 2, y + rise, (base[2] + tip[2]) / 2)
+        b.tube([base, mid, tip], [r, r * 0.85, r * 0.7], ring=6)
+        if pad:
+            b.blob(tip, (pad, pad * 0.6, pad), seg=8)
+
 
 def frog_texture(W=256, H=256):
     U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
-    col = np.array([0.4, 0.72, 0.25]) * (0.85 + 0.3 * value_noise(W, H, 20, 31)[..., None])
+    n = value_noise(W, H, 20, 31) * 0.6 + value_noise(W, H, 70, 36) * 0.4
+    col = np.array([0.15, 0.45, 0.06]) * (0.85 + 0.3 * n[..., None])
     edge = np.abs(U - 0.5) * 2
-    col = col * (1 - 0.25 * smoothstep(0.7, 1, edge))[..., None]
+    col = col * (1 - 0.2 * smoothstep(0.7, 1, edge))[..., None]
     return image('frog', col)
 
 
+def tadpole_texture(W=256, H=256):
+    n = value_noise(W, H, 24, 38)
+    col = np.array([0.2, 0.19, 0.13]) * (0.8 + 0.4 * n[..., None])
+    gold = smoothstep(0.78, 0.86, value_noise(W, H, 60, 39))[..., None]
+    col = col * (1 - gold) + np.array([0.62, 0.52, 0.28]) * gold
+    return image('tadpole', col)
+
+
 def turtle_texture(W=512, H=512):
-    """こうらの こうばん（6かく の もよう）と ふち"""
+    """クサガメの こうら：こうばん（せなか 5まい・よこ 4まい ずつ・ふち）の さかいの みぞ と ねんりん、3ぼんの すじ（キール）"""
     U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
     x, y = (U - 0.5) * 2, (Vv - 0.5) * 2
-    # こうばんの さかい：たて 3れつ ＋ まわり
-    lines = np.zeros_like(U)
-    for c in (-0.33, 0.33):
-        lines = np.maximum(lines, smoothstep(0.03, 0.0, np.abs(x - c)) * (np.abs(y) < 0.75))
-    for c in (-0.45, 0.0, 0.45):
-        lines = np.maximum(lines, smoothstep(0.03, 0.0, np.abs(y - c)) * (np.abs(x) < 0.9))
-    rim = smoothstep(0.82, 0.86, np.hypot(x, y * 0.95))
-    lines = np.maximum(lines, rim * 0.8)
-    base = np.array([0.33, 0.29, 0.17]) * (0.8 + 0.4 * value_noise(W, H, 30, 32)[..., None])
-    col = base * (1 - 0.6 * lines[..., None])
-    # ゼニガメの きいろい すじ（3ぼん）
-    keel = sum(smoothstep(0.025, 0.0, np.abs(x - c)) for c in (-0.3, 0.0, 0.3)) * (np.abs(y) < 0.7)
-    col = col * (1 - 0.6 * keel[..., None]) + np.array([0.75, 0.66, 0.3]) * 0.6 * keel[..., None]
-    return image('turtle_shell', col)
+    cs = [(0, z) for z in (0.72, 0.36, 0.0, -0.36, -0.72)] + [(sx * 0.52, z) for sx in (-1, 1) for z in (0.54, 0.18, -0.18, -0.54)]
+    d = np.stack([np.hypot((x - cx) * 1.0, (y - cy) * 1.1) for cx, cy in cs])
+    d.sort(axis=0)
+    seam = smoothstep(0.035, 0.0, d[1] - d[0])
+    rings = 0.5 + 0.5 * np.sin(d[0] * 70)
+    r = np.hypot(x, y * 0.95)
+    rim = smoothstep(0.8, 0.83, r)
+    ang = np.arctan2(y, x)
+    marg = smoothstep(0.06, 0.0, np.abs(((ang / (2 * np.pi) * 26) % 1) - 0.5) * 2 - 0.92) * rim
+    seam = np.maximum(seam * (1 - rim), np.maximum(smoothstep(0.012, 0.0, np.abs(r - 0.815)), marg))
+    base = np.array([0.30, 0.25, 0.14]) * (0.78 + 0.35 * value_noise(W, H, 30, 32)[..., None])
+    base = base * (0.92 + 0.12 * rings[..., None])
+    col = base * (1 - 0.65 * seam[..., None])
+    keel = sum(smoothstep(0.03, 0.0, np.abs(x - c)) for c in (-0.42, 0.0, 0.42)) * (np.abs(y) < 0.78) * (1 - rim)
+    col = col * (1 + 0.35 * keel[..., None])
+    hgt = 1 - seam + 0.15 * rings + 0.6 * keel
+    return image('turtle_shell', col), normal_image('turtle_shell_n', hgt, 4.0)
 
 
-def sansho_texture(W=512, H=256, larva=False):
+def skin_texture(name, base, W=256, H=256, seed=40, scale=40):
+    n = value_noise(W, H, scale, seed)
+    cells = value_noise(W, H, scale * 2, seed + 1)
+    col = np.array(base) * (0.8 + 0.35 * n[..., None]) * (0.9 + 0.15 * smoothstep(0.4, 0.7, cells)[..., None])
+    return image(name, col), normal_image(name + '_n', cells, 2.5)
+
+
+def sansho_texture(W=1024, H=512, larva=False):
+    """オオサンショウウオ（loft の u・v）：ちゃいろに くろい まだら、いぼ、くちの せん、うすい おなか"""
+    U, Vv = np.meshgrid((np.arange(W) + 0.5) / W, (np.arange(H) + 0.5) / H)
+    # 横長の がぞう：よこ ＝ v（からだの ながさ）、たて ＝ u（まわり）
+    u, v = Vv, U
     n = value_noise(W, H, 16, 33) * 0.6 + value_noise(W, H, 60, 34) * 0.4
-    col = np.array([0.42, 0.35, 0.24]) * (0.75 + 0.5 * n[..., None])
+    base = np.array([0.36, 0.29, 0.19]) if not larva else np.array([0.42, 0.34, 0.22])
+    col = base * (0.78 + 0.45 * n[..., None])
+    side = np.minimum(np.abs(u - 0.25), np.abs(u - 0.75))
+    belly = smoothstep(0.17, 0.08, np.minimum(u, 1 - u))
     if not larva:
-        spots = smoothstep(0.6, 0.7, value_noise(W, H, 28, 35))[..., None]
-        col = col * (1 - 0.55 * spots)
-    return image('sansho_larva' if larva else 'sansho', col)
+        spots = smoothstep(0.58, 0.68, value_noise(W, H, 26, 35) * 0.7 + value_noise(W, H, 80, 41) * 0.3)
+        col = col * (1 - 0.6 * spots * (1 - belly))[..., None]
+    col = col * (1 - belly[..., None]) + np.array([0.55, 0.49, 0.4]) * belly[..., None] * (0.85 + 0.2 * n[..., None])
+    # いぼ（あたまと からだの うえ・よこ）
+    warts = smoothstep(0.62, 0.75, value_noise(W, H, 110, 42)) * (1 - belly)
+    col = col * (1 + 0.25 * warts[..., None])
+    # くちの せん（はなさきから うしろへ、よこの すこし した）
+    lipu = 0.25 - 0.035 + 0.03 * smoothstep(0.995, 0.86, v)
+    lip = np.maximum(smoothstep(0.008, 0.0, np.abs(u - lipu)), smoothstep(0.008, 0.0, np.abs(u - (1 - lipu)))) * (v > 0.83)
+    col = col * (1 - 0.7 * lip[..., None])
+    hgt = warts * 1.0 + 0.3 * n - 0.8 * lip
+    img = image('sansho_larva' if larva else 'sansho', col)
+    nrm = normal_image(('sansho_larva' if larva else 'sansho') + '_n', hgt, 3.0)
+    return img, nrm, value_noise(W, H, 110, 42)
 
 
 def build_animals():
-    frog = material('frog', img=frog_texture(), rough=0.35, coat=0.6)
-    belly = material('frog_belly', (0.92, 0.94, 0.85), rough=0.6)
+    frog = material('frog', img=frog_texture(), rough=0.5, coat=0.15)
+    belly = material('frog_belly', (0.93, 0.94, 0.86), rough=0.6)
+    throat = material('frog_throat', (0.92, 0.88, 0.62), rough=0.4, coat=0.5)
+    stripe = material('frog_stripe', (0.25, 0.2, 0.12), rough=0.5)
     eye = material('eye', (0.05, 0.04, 0.03), rough=0.1, coat=1.0)
+    iris = material('iris', (0.5, 0.38, 0.14), rough=0.3, coat=0.6)
     jelly = material('jelly', (0.85, 0.93, 0.88), rough=0.1)
-    tadc = material('tadpole', (0.24, 0.22, 0.17), rough=0.4)
-    shell = material('turtle_shell', img=turtle_texture(), rough=0.45, coat=0.4)
-    skin = material('turtle_skin', (0.36, 0.4, 0.22), rough=0.6)
-    stripe = material('turtle_stripe', (0.82, 0.76, 0.3), rough=0.6)
+    tadc = material('tadpole', img=tadpole_texture(), rough=0.35, coat=0.4)
+    fin = material('tadpole_fin', (0.55, 0.52, 0.42), rough=0.3)
+    stex, snrm = turtle_texture()
+    shell = material('turtle_shell', img=stex, rough=0.55, coat=0.12, normal=snrm)
+    plast = material('turtle_plastron', (0.55, 0.45, 0.24), rough=0.5)
+    ktex, knrm = skin_texture('turtle_skin', (0.33, 0.36, 0.22))
+    skin = material('turtle_skin', img=ktex, rough=0.6, normal=knrm)
+    kstripe = material('turtle_stripe', (0.8, 0.74, 0.32), rough=0.6)
+    claw = material('claw', (0.2, 0.17, 0.12), rough=0.4)
     eggw = material('egg', (0.97, 0.95, 0.88), rough=0.5)
-    sal = material('sansho', img=sansho_texture(), rough=0.55)
-    salL = material('sansho_larva', img=sansho_texture(larva=True), rough=0.5)
-    gill = material('gill', (0.82, 0.48, 0.38), rough=0.5)
+    gill = material('gill', (0.85, 0.45, 0.38), rough=0.45)
 
-    # ---- カエル ----
+    # ---- カエル：たまご ----
     root = empty('kaeru_egg')
     b = B()
     b.blob((0, 0.05, 0), (0.22, 0.07, 0.17), seg=16)
@@ -718,115 +862,295 @@ def build_animals():
         r = 0.15 * math.sqrt((k + 0.5) / 18)
         b.blob((r * math.cos(a), 0.06, r * math.sin(a)), (0.022, 0.022, 0.022), seg=8)
     obj('kaeru_egg_dots', b.bm, eye, root)
+
+    # ---- オタマジャクシ（あしが はえる まえ・あと）。からだと しっぽは アプリで くねらせる ----
     for key, legs in (('tadpole', False), ('legs', True)):
-        root = empty(f'kaeru_{key}')
+        M = f'kaeru_{key}'
+        root = root_of(M)
         b = B()
-        b.blob((0, 0.04, 0.04), (0.06, 0.045, 0.075), seg=14)
+        b.blob((0, 0.042, 0.035), (0.062, 0.046, 0.078), seg=18,
+               deform=lambda u, p: p * np.array([1 + 0.12 * max(0, u[2]), 1, 1]))
+        # しっぽの きんにく
+        b.tube([(0, 0.045, -0.02), (0, 0.045, -0.08), (0, 0.044, -0.15), (0, 0.043, -0.21)], [0.022, 0.014, 0.007, 0.0015], ring=10, flat=1.4)
         if legs:
+            # まえあしの め（ちいさな こぶ）
             for s in (-1, 1):
-                b.tube([(s * 0.04, 0.02, -0.02), (s * 0.08, 0.0, -0.06), (s * 0.06, 0.0, -0.1)], [0.012, 0.01, 0.008], ring=6)
-        obj(f'kaeru_{key}_body', b.bm, tadc, root)
-        tail = empty('tail', (0, 0.04, -0.03), root)
-        t = B()
-        t.tube([(0, 0, 0), (0, 0, -0.08), (0, 0, -0.17)], [0.018, 0.012, 0.002], ring=6, flat=3.0)
-        obj(f'kaeru_{key}_tail', t.bm, tadc, tail)
+                b.blob((s * 0.052, 0.025, 0.03), (0.01, 0.008, 0.012), seg=8)
+        obj(f'{M}_body', b.bm, tadc, root)
+        f = B()
+        f.tube([(0, 0.046, -0.01), (0, 0.047, -0.06), (0, 0.046, -0.12), (0, 0.045, -0.18), (0, 0.044, -0.225)],
+               [0.004, 0.0045, 0.004, 0.003, 0.001], ring=8, flat=7.0)
+        obj(f'{M}_fin', f.bm, fin, root)
         e = B()
         for s in (-1, 1):
-            e.blob((s * 0.035, 0.06, 0.08), (0.012, 0.012, 0.012), seg=8)
-        obj(f'kaeru_{key}_eyes', e.bm, material('tad_eye', (0.8, 0.75, 0.55), rough=0.3), root)
-    # カエル（こガエルは アプリで ちいさく）
-    root = empty('kaeru_adult')
+            e.blob((s * 0.036, 0.062, 0.075), (0.012, 0.012, 0.012), seg=10)
+        obj(f'{M}_eyes', e.bm, iris, root)
+        e = B()
+        for s in (-1, 1):
+            e.blob((s * 0.041, 0.065, 0.08), (0.0065, 0.0065, 0.0065), seg=8)
+        e.blob((0, 0.03, 0.11), (0.012, 0.005, 0.005), seg=8)      # くち
+        obj(f'{M}_pupils', e.bm, eye, root)
+        if legs:
+            for s, side in ((1, 'R'), (-1, 'L')):
+                hip = joint(M, f'hip{side}', (s * 0.022, 0.035, -0.035), root)
+                b = B()
+                b.tube([(s * 0.022, 0.035, -0.035), (s * 0.052, 0.034, -0.05)], [0.011, 0.008], ring=8)
+                b.blob((s * 0.052, 0.034, -0.05), (0.008, 0.008, 0.008), seg=8)
+                part(f'{M}_thigh{side}', b, tadc, hip)
+                knee = joint(M, f'knee{side}', (s * 0.052, 0.034, -0.05), hip)
+                b = B()
+                b.tube([(s * 0.052, 0.034, -0.05), (s * 0.04, 0.034, -0.085), (s * 0.045, 0.034, -0.1)], [0.007, 0.006, 0.004], ring=6)
+                toes(b, (s * 0.045, 0.034, -0.1), [s * 160, s * 172, -s * 176, -s * 165], [0.02, 0.024, 0.022, 0.018], r=0.0025, y=0.034, rise=0.0)
+                part(f'{M}_shin{side}', b, tadc, knee)
+
+    # ---- アマガエル（こガエルは アプリで ちいさく） ----
+    M = 'kaeru_adult'
+    root = root_of(M)
+    HC, HR_ = (0, 0.075, 0.07), (0.075, 0.042, 0.062)
+    TC, TR = (0, 0.062, -0.018), (0.074, 0.05, 0.095)
+    TD = lambda u, p: p * np.array([1 - 0.12 * max(0, -u[2]), 1 + 0.08 * max(0, -u[2]), 1])
+    HD = lambda u, p: p * np.array([1 - 0.25 * max(0, u[2]) ** 2, 1 - 0.15 * max(0, u[2]), 1])
     b = B()
-    b.blob((0, 0.07, 0), (0.09, 0.06, 0.11), seg=18, deform=lambda u, p: p * np.array([1 + 0.15 * max(0, -u[2]), 1, 1]))
-    b.blob((0, 0.08, 0.09), (0.075, 0.05, 0.06), seg=14)
+    b.blob(TC, TR, seg=22, deform=TD)
+    b.blob(HC, HR_, seg=20, deform=HD)
+    obj(f'{M}_body', b.bm, frog, root)
+    b = B()
+    b.blob((0, 0.034, -0.005), (0.066, 0.028, 0.098), seg=14)
+    b.blob((0, 0.045, 0.08), (0.06, 0.02, 0.05), seg=12)
+    obj(f'{M}_belly', b.bm, belly, root)
+    # はなさき から め を とおって かたへ の こげちゃの すじ
+    s_ = B()
     for s in (-1, 1):
-        b.blob((s * 0.05, 0.12, 0.1), (0.028, 0.028, 0.028), seg=10)
-        # うしろあし（たたむ）
-        b.tube([(s * 0.07, 0.05, -0.05), (s * 0.12, 0.04, 0.02), (s * 0.09, 0.015, -0.08), (s * 0.13, 0.008, -0.13)], [0.03, 0.025, 0.015, 0.01], ring=8)
-        b.tube([(s * 0.06, 0.04, 0.08), (s * 0.09, 0.015, 0.12), (s * 0.1, 0.008, 0.15)], [0.016, 0.012, 0.008], ring=6)
-    obj('kaeru_adult_body', b.bm, frog, root)
-    b = B()
-    b.blob((0, 0.035, 0.03), (0.08, 0.025, 0.1), seg=12)
-    obj('kaeru_adult_belly', b.bm, belly, root)
+        pts = [ell_pt(HC, HR_, el, s * az, HD, 0.985) for el, az in ((22, 15), (25, 40), (22, 75), (12, 100))]
+        pts += [ell_pt(TC, TR, el, s * az, TD, 0.985) for el, az in ((18, 62), (14, 82))]
+        s_.tube(pts, [0.0025, 0.004, 0.005, 0.005, 0.004, 0.0015], ring=8)
+        s_.blob(ell_pt(HC, HR_, 16, s * 14, HD, 1.0), (0.004, 0.003, 0.004), seg=6)   # はなの あな
+    obj(f'{M}_stripe', s_.bm, stripe, root)
+    e = B()
+    ep = {}
+    for s in (-1, 1):
+        ep[s] = (s * 0.05, 0.1, 0.088)
+        e.blob(ep[s], (0.018, 0.017, 0.017), seg=14)
+    obj(f'{M}_eyes', e.bm, iris, root)
     e = B()
     for s in (-1, 1):
-        e.blob((s * 0.058, 0.128, 0.115), (0.018, 0.018, 0.016), seg=10)
-    obj('kaeru_adult_eyes', e.bm, eye, root)
+        d = norm(np.array([s * 0.75, 0.45, 0.5]))
+        c = np.array(ep[s]) + d * 0.0125
+        e.blob(tuple(c), (0.012, 0.0075, 0.011), seg=10)
+    obj(f'{M}_pupils', e.bm, eye, root)
+    # のど（なく とき ふくらむ）
+    th = joint(M, 'throat', (0, 0.04, 0.09), root)
+    b = B()
+    b.blob((0, 0.04, 0.09), (0.05, 0.02, 0.038), seg=14)
+    part(f'{M}_throat', b, throat, th)
+    for s, side in ((1, 'R'), (-1, 'L')):
+        # うしろあし：もも（hip）→ すね（knee）→ あし（ankle）。すわって たたんだ かたち
+        hipP, kneeP, ankP = (s * 0.055, 0.045, -0.08), (s * 0.125, 0.033, -0.005), (s * 0.082, 0.02, -0.095)
+        hip = joint(M, f'hip{side}', hipP, root)
+        b = B()
+        b.tube([hipP, ((hipP[0] + kneeP[0]) / 2 + s * 0.008, 0.045, (hipP[2] + kneeP[2]) / 2), kneeP], [0.027, 0.023, 0.016], ring=12)
+        b.blob(kneeP, (0.016, 0.016, 0.016), seg=10)
+        part(f'{M}_thigh{side}', b, frog, hip)
+        knee = joint(M, f'knee{side}', kneeP, hip)
+        b = B()
+        b.tube([kneeP, ((kneeP[0] + ankP[0]) / 2 + s * 0.006, 0.03, (kneeP[2] + ankP[2]) / 2), ankP], [0.015, 0.013, 0.01], ring=10)
+        b.blob(ankP, (0.01, 0.01, 0.01), seg=8)
+        part(f'{M}_shin{side}', b, frog, knee)
+        ank = joint(M, f'ankle{side}', ankP, knee)
+        b = B()
+        mid = (s * 0.118, 0.01, -0.045)
+        b.tube([ankP, mid], [0.009, 0.007], ring=8)
+        toes(b, mid, [s * a for a in (5, 22, 40, 58, 80)], [0.026, 0.036, 0.045, 0.036, 0.024], r=0.0038, pad=0.0062, y=0.006)
+        part(f'{M}_foot{side}', b, frog, ank)
+        # まえあし：かた → ひじ
+        shP, elP, wrP = (s * 0.055, 0.048, 0.055), (s * 0.08, 0.03, 0.075), (s * 0.075, 0.009, 0.112)
+        sh = joint(M, f'sh{side}', shP, root)
+        b = B()
+        b.tube([shP, elP], [0.016, 0.012], ring=10)
+        b.blob(elP, (0.011, 0.011, 0.011), seg=8)
+        part(f'{M}_arm{side}', b, frog, sh)
+        el = joint(M, f'el{side}', elP, sh)
+        b = B()
+        b.tube([elP, wrP], [0.011, 0.008], ring=8)
+        toes(b, wrP, [s * a for a in (-30, -5, 20, 45)], [0.018, 0.024, 0.024, 0.018], r=0.003, pad=0.0052, y=0.006)
+        part(f'{M}_hand{side}', b, frog, el)
 
-    # ---- カメ（ゼニガメ・こども・おとなは アプリで おおきさを かえる） ----
+    # ---- カメ（クサガメ。ゼニガメ・こども・おとなは アプリで おおきさを かえる） ----
     root = empty('kame_egg')
     b = B()
-    for (x, z, a) in ((-0.05, 0, 0), (0.05, 0.02, 0.3), (0, -0.06, 0.6), (0.02, 0.07, 0.9)):
+    for (x, z) in ((-0.05, 0), (0.05, 0.02), (0, -0.06), (0.02, 0.07)):
         b.blob((x, 0.04, z), (0.032, 0.03, 0.042), seg=12)
     obj('kame_egg_eggs', b.bm, eggw, root)
-    root = empty('kame')
+    M = 'kame'
+    root = root_of(M)
     b = B()
     def dome(u, p):
         if u[1] < 0:
             p[1] *= 0.25
+        # ふちを すこし そらせ、うしろの ふちは ぎざぎざ
+        rim = math.exp(-(u[1] / 0.18) ** 2)
+        k = 1 + 0.05 * rim
+        if u[2] < -0.3:
+            k += 0.025 * rim * max(0, math.cos(math.atan2(u[0], -u[2]) * 13))
+        p[0] *= k
+        p[2] *= k
+        p[1] += 0.012 * rim
         return p
-    b.blob((0, 0.1, 0), (0.17, 0.09, 0.22), seg=24, deform=dome, uvfn=lambda x, y, z: (0.5 + x / 0.36, 0.5 + z / 0.46))
-    obj('kame_shell', b.bm, shell, root)
+    b.blob((0, 0.1, 0), (0.17, 0.095, 0.22), seg=40, deform=dome, uvfn=lambda x, y, z: (0.5 + x / 0.38, 0.5 + z / 0.48))
+    obj(f'{M}_shell', b.bm, shell, root)
     b = B()
-    b.blob((0, 0.11, 0.27), (0.05, 0.045, 0.065), seg=12)
-    b.tube([(0, 0.09, 0.15), (0, 0.105, 0.23)], [0.04, 0.042], ring=10)
-    for s in (-1, 1):
-        for zz in (0.13, -0.13):
-            b.tube([(s * 0.12, 0.06, zz), (s * 0.2, 0.025, zz + 0.04 * (1 if zz > 0 else -1)), (s * 0.22, 0.01, zz + 0.06 * (1 if zz > 0 else -1))], [0.035, 0.03, 0.018], ring=8)
-    b.tube([(0, 0.07, -0.2), (0, 0.06, -0.27), (0, 0.05, -0.3)], [0.025, 0.015, 0.004], ring=6)
-    obj('kame_skin', b.bm, skin, root)
+    b.blob((0, 0.07, 0), (0.155, 0.028, 0.205), seg=20)
+    obj(f'{M}_plastron', b.bm, plast, root)
+    # くび → あたま（ひっこめる・きょろきょろ）
+    neck = joint(M, 'neck', (0, 0.085, 0.15), root)
+    b = B()
+    b.tube([(0, 0.08, 0.1), (0, 0.088, 0.17), (0, 0.098, 0.235)], [0.04, 0.038, 0.034], ring=12)
+    part(f'{M}_neck', b, skin, neck)
+    head = joint(M, 'head', (0, 0.1, 0.235), neck)
+    HC2, HR2 = (0, 0.108, 0.275), (0.042, 0.037, 0.058)
+    KD = lambda u, p: p * np.array([1 - 0.3 * max(0, u[2]) ** 2, 1 - 0.2 * max(0, u[2]), 1])
+    b = B()
+    b.blob(HC2, HR2, seg=16, deform=KD)
+    part(f'{M}_head', b, skin, head)
     b = B()
     for s in (-1, 1):
-        b.tube([(s * 0.032, 0.115, 0.2), (s * 0.04, 0.12, 0.3)], [0.008, 0.006], ring=6)
-    obj('kame_stripes', b.bm, stripe, root)
+        b.tube([ell_pt(HC2, HR2, el, s * az, KD, 0.99) for el, az in ((25, 40), (30, 70), (25, 100), (20, 130))], [0.0025, 0.0035, 0.0035, 0.003], ring=6)
+        b.tube([ell_pt(HC2, HR2, el, s * az, KD, 0.99) for el, az in ((-12, 45), (-18, 80), (-20, 115), (-22, 145))], [0.0025, 0.0035, 0.0035, 0.003], ring=6)
+    part(f'{M}_stripes', b, kstripe, head)
+    b = B()
+    for s in (-1, 1):
+        b.tube([ell_pt(HC2, HR2, el, s * az, KD, 0.995) for el, az in ((-28, 5), (-24, 40), (-20, 75))], [0.002, 0.0025, 0.0018], ring=6)
+    part(f'{M}_mouth', b, claw, head)
     e = B()
     for s in (-1, 1):
-        e.blob((s * 0.035, 0.125, 0.3), (0.011, 0.011, 0.011), seg=8)
-    obj('kame_eyes', e.bm, eye, root)
+        e.blob(ell_pt(HC2, HR2, 20, s * 50, KD, 0.93), (0.009, 0.009, 0.009), seg=10)
+    part(f'{M}_eyes', e, iris, head)
+    e = B()
+    for s in (-1, 1):
+        e.blob(ell_pt(HC2, HR2, 20, s * 52, KD, 1.07), (0.005, 0.005, 0.005), seg=8)
+    part(f'{M}_pupils', e, eye, head)
+    for s, side in ((1, 'R'), (-1, 'L')):
+        for fb, zz in (('F', 0.12), ('H', -0.12)):
+            fz = 1 if fb == 'F' else -1
+            p0 = (s * 0.11, 0.07, zz)
+            p1 = (s * 0.158, 0.045, zz + fz * 0.03)
+            p2 = (s * 0.18, 0.014, zz + fz * 0.045)
+            j1 = joint(M, f'leg{fb}{side}', p0, root)
+            b = B()
+            b.tube([p0, p1], [0.04, 0.034], ring=12)
+            b.blob(p1, (0.033, 0.033, 0.033), seg=10)
+            part(f'{M}_leg{fb}{side}', b, skin, j1)
+            j2 = joint(M, f'leg{fb}{side}2', p1, j1)
+            b = B()
+            b.tube([p1, p2], [0.032, 0.026], ring=10)
+            b.blob((p2[0] + s * 0.012, 0.012, p2[2] + fz * 0.012), (0.032, 0.012, 0.03), seg=10)
+            part(f'{M}_foot{fb}{side}', b, skin, j2)
+            c = B()
+            base = (p2[0] + s * 0.012, 0.012, p2[2] + fz * 0.012)
+            n_ = 5 if fb == 'F' else 4
+            for k in range(n_):
+                a = math.radians((s * (40 + (k - (n_ - 1) / 2) * 22)) if fb == 'F' else (s * (110 + (k - (n_ - 1) / 2) * 22)))
+                tip = (base[0] + math.sin(a) * 0.04, 0.004, base[2] + math.cos(a) * 0.04)
+                c.tube([(base[0] + math.sin(a) * 0.024, 0.009, base[2] + math.cos(a) * 0.024), tip], [0.0045, 0.0008], ring=6)
+            part(f'{M}_claws{fb}{side}', c, claw, j2)
+    tail = joint(M, 'tail', (0, 0.065, -0.19), root)
+    b = B()
+    b.tube([(0, 0.065, -0.17), (0, 0.055, -0.25), (0, 0.04, -0.3)], [0.024, 0.013, 0.003], ring=10)
+    part(f'{M}_tail', b, skin, tail)
 
     # ---- オオサンショウウオ ----
     root = empty('sansho_egg')
     b = B()
     pts = [(0.25 * math.cos(a) * (1 + 0.2 * math.sin(a * 3)), 0.04, 0.18 * math.sin(a)) for a in np.linspace(0, 2 * math.pi * 1.3, 20)]
     b.tube(pts, [0.008] * 20, ring=5, cap=False)
-    for p in pts[::1]:
+    for p in pts:
         b.blob(p, (0.03, 0.03, 0.03), seg=8)
     obj('sansho_egg_string', b.bm, jelly, root)
     y = B()
     for p in pts:
         y.blob(p, (0.012, 0.012, 0.012), seg=6)
     obj('sansho_egg_yolk', y.bm, material('yolk', (0.92, 0.75, 0.3), rough=0.4), root)
+
     for key, larva in (('larva', True), ('adult', False)):
-        root = empty(f'sansho_{key}')
+        M = f'sansho_{key}'
+        root = root_of(M)
+        tex, nrm, wartn = sansho_texture(larva=larva)
+        mat = material(M, img=tex, rough=0.55 if larva else 0.62, coat=0.08, normal=nrm)
+        k = 0.82 if larva else 1.0          # ようせいは ほそめ
+        tl = 1.25 if larva else 1.0         # ようせいは しっぽの ひれが たかい
+        secs = [
+            (0.43, 0.015, 0.008, 0.006, 2.4), (0.415, 0.06 * k, 0.022, 0.015, 2.6), (0.39, 0.1 * k, 0.032, 0.02, 2.6),
+            (0.35, 0.125 * k, 0.038, 0.024, 2.7), (0.3, 0.135 * k, 0.041, 0.026, 2.7), (0.25, 0.13 * k, 0.042, 0.027, 2.6),
+            (0.21, 0.118 * k, 0.042, 0.028, 2.5), (0.15, 0.122 * k, 0.046, 0.03, 2.5), (0.06, 0.13 * k, 0.049, 0.031, 2.5),
+            (-0.03, 0.127 * k, 0.048, 0.03, 2.5), (-0.1, 0.11 * k, 0.046, 0.029, 2.4), (-0.16, 0.08 * k, 0.05 * tl, 0.03, 2.1),
+            (-0.24, 0.05 * k, 0.056 * tl, 0.03, 1.8), (-0.32, 0.035 * k, 0.052 * tl, 0.028, 1.6), (-0.39, 0.022 * k, 0.04 * tl, 0.02, 1.5),
+            (-0.44, 0.005, 0.012, 0.008, 1.5),
+        ]
+        WH, WW = wartn.shape
+
+        def disp(u, v, z, a, larva=larva, wartn=wartn):
+            d = 0.0
+            # からだの よこの ひだ（おとな）：まえあし と うしろあし の あいだ
+            if not larva and -0.12 < z < 0.2:
+                side = min(abs(math.cos(a)), 1.0)
+                env = smoothstep(-0.12, -0.06, z) * smoothstep(0.2, 0.14, z)
+                d += 0.013 * env * math.exp(-((math.sin(a) + 0.15) / 0.22) ** 2) * side * (0.65 + 0.35 * math.sin(z * 95))
+            # いぼ
+            w = wartn[min(WH - 1, int(u * WH)), min(WW - 1, int(v * WW))]
+            d += (0.0 if larva else 0.0035) * smoothstep(0.6, 0.8, w) * (math.sin(a) > -0.6)
+            # くちの みぞ
+            if z > 0.3:
+                for c in (-0.2, math.pi + 0.2):
+                    da = math.atan2(math.sin(a - c), math.cos(a - c))
+                    d -= 0.004 * math.exp(-(da / 0.06) ** 2) * smoothstep(0.3, 0.34, z)
+            return d
         b = B()
-        L = 0.55
-        def flat(u, p):
-            p[1] *= 1 - 0.25 * max(0, u[1])
-            return p
-        b.blob((0, 0.06, 0.08), (0.11, 0.05, 0.22), seg=20, deform=flat, uvfn=lambda x, y, z: (0.5 + x / 0.3, 0.5 + z / 0.6))
-        b.blob((0, 0.055, 0.3), (0.12, 0.045, 0.1), seg=18, deform=flat, uvfn=lambda x, y, z: (0.5 + x / 0.3, 0.8 + z / 0.6))
-        for s in (-1, 1):
-            for zz in (0.2, -0.05):
-                b.tube([(s * 0.09, 0.04, zz), (s * 0.16, 0.015, zz + 0.03), (s * 0.18, 0.006, zz + 0.05)], [0.03, 0.022, 0.012], ring=8)
-            # からだの よこの ひだ
-            if not larva:
-                b.tube([(s * 0.1, 0.045, 0.2), (s * 0.115, 0.04, 0.05), (s * 0.1, 0.04, -0.1)], [0.012, 0.014, 0.008], ring=6)
-        obj(f'sansho_{key}_body', b.bm, salL if larva else sal, root)
-        tail = empty('tail', (0, 0.055, -0.12), root)
-        t = B()
-        t.tube([(0, 0, 0), (0, 0, -0.15), (0, 0, -0.3)], [0.06, 0.045, 0.004], ring=8, flat=1.8)
-        obj(f'sansho_{key}_tail', t.bm, salL if larva else sal, tail)
+        loft(b, secs, ring=32 if not larva else 24, disp=disp, steps=80 if not larva else 60)
+        obj(f'{M}_body', b.bm, mat, root)
         e = B()
         for s in (-1, 1):
-            e.blob((s * 0.07, 0.085, 0.34), (0.01, 0.01, 0.01), seg=6)
-        obj(f'sansho_{key}_eyes', e.bm, eye, root)
+            e.blob((s * 0.082 * k, 0.059, 0.34), (0.0085, 0.006, 0.0085), seg=8)
+            e.blob((s * 0.028 * k, 0.026, 0.424), (0.004, 0.003, 0.004), seg=6)   # はなの あな
+        obj(f'{M}_eyes', e.bm, eye, root)
+        e = B()
+        for s in (-1, 1):
+            e.blob((s * 0.082 * k, 0.056, 0.34), (0.011, 0.006, 0.011), seg=8)
+        obj(f'{M}_iris', e.bm, iris, root)
+        lr = 0.75 if larva else 1.0
+        for s, side in ((1, 'R'), (-1, 'L')):
+            for fb, (p0, p1, p2, fingers) in (
+                ('F', ((s * 0.1 * k, 0.03, 0.17), (s * 0.165 * k, 0.028, 0.185), (s * 0.18 * k, 0.008, 0.215), [s * a for a in (-15, 10, 35, 60)])),
+                ('H', ((s * 0.09 * k, 0.03, -0.09), (s * 0.16 * k, 0.028, -0.1), (s * 0.18 * k, 0.008, -0.075), [s * a for a in (0, 25, 50, 75, 100)])),
+            ):
+                j1 = joint(M, f'leg{fb}{side}', p0, root)
+                b = B()
+                b.tube([p0, p1], [0.03 * lr, 0.023 * lr], ring=12)
+                b.blob(p1, (0.023 * lr, 0.022 * lr, 0.023 * lr), seg=10)
+                part(f'{M}_leg{fb}{side}', b, mat, j1)
+                j2 = joint(M, f'leg{fb}{side}2', p1, j1)
+                b = B()
+                b.tube([p1, p2], [0.022 * lr, 0.017 * lr], ring=10)
+                hc = (p2[0] + s * 0.006, 0.008, p2[2] + 0.006)
+                b.blob(hc, (0.026 * lr, 0.009, 0.022 * lr), seg=10)
+                toes(b, hc, fingers, [0.028 * lr] * len(fingers), r=0.008 * lr, pad=0.0075 * lr, y=0.006, rise=0.003)
+                if fb == 'H' and not larva:
+                    # うしろあしの うしろがわの ひだ
+                    b.tube([(p1[0], 0.026, p1[2] - 0.02), (p2[0] + s * 0.01, 0.01, p2[2] - 0.02)], [0.008, 0.006], ring=8, flat=0.35)
+                part(f'{M}_foot{fb}{side}', b, mat, j2)
         if larva:
-            g = B()
-            for s in (-1, 1):
-                for k in range(3):
-                    base = (s * 0.1, 0.07, 0.24 - k * 0.025)
-                    g.tube([base, (base[0] + s * 0.06, base[1] + 0.03, base[2] - 0.02), (base[0] + s * 0.09, base[1] + 0.02, base[2] - 0.05)], [0.012, 0.009, 0.004], ring=6)
-            obj('sansho_larva_gills', g.bm, gill, root)
+            for s, side in ((1, 'R'), (-1, 'L')):
+                gj = joint(M, f'gill{side}', (s * 0.085, 0.05, 0.24), root)
+                g = B()
+                for kk in range(3):
+                    base = np.array((s * 0.085, 0.05 + kk * 0.008, 0.25 - kk * 0.022))
+                    d = np.array((s * 0.06, 0.03 - kk * 0.01, -0.035 - kk * 0.01))
+                    pts = [base + d * t for t in np.linspace(0, 1, 5)]
+                    g.tube(pts, [0.0075, 0.007, 0.006, 0.004, 0.002], ring=6)
+                    for t in np.linspace(0.2, 0.9, 6):
+                        c = base + d * t
+                        for sg in (-1, 1):
+                            g.tube([tuple(c), tuple(c + np.array((0, 0.016 * sg, -0.006)))], [0.0028, 0.001], ring=5)
+                part(f'{M}_gill{side}', g, gill, gj)
 
 
 def main():

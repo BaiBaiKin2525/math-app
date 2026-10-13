@@ -110,6 +110,73 @@ const LOOKS = {
   sansho: { egg: ['sansho_egg', 1.5], larva: ['sansho_larva', 0.9], child: ['sansho_adult', 0.95], adult: ['sansho_adult', 1.8] },
 };
 
+// ふし（かんせつ）：Blender の から <モデル>_j_<なまえ>。R は x が ＋の がわ（あたまは ＋z）
+// くねらせる からだ：z0 より うしろが ゆれ、しっぽの さき（len）ほど おおきく。base：まえの ほうの ゆれ、k：なみの こまかさ
+const BEND = {
+  kaeru_tadpole: { z0: 0.07, len: 0.3, base: 0.0, p: 1.3, k: 24 },
+  kaeru_legs: { z0: 0.07, len: 0.3, base: 0.0, p: 1.3, k: 24 },
+  sansho_larva: { z0: 0.32, len: 0.76, base: 0.18, p: 1.5, k: 8 },
+  sansho_adult: { z0: 0.32, len: 0.76, base: 0.18, p: 1.5, k: 8 },
+};
+function rigModel(m, name) {
+  const J = {};
+  const prefix = `${name}_j_`;
+  m.traverse((o) => {
+    if (!o.name.startsWith(prefix)) return;
+    J[o.name.slice(prefix.length)] = o;
+    o.userData.p0 = o.position.clone();
+    o.userData.r0 = o.rotation.clone();
+  });
+  const cfg = BEND[name];
+  const env = (z) => (cfg ? cfg.base + (1 - cfg.base) * Math.min(1, Math.max(0, (cfg.z0 - z) / cfg.len)) ** cfg.p : 0);
+  const bend = [];
+  if (cfg) {
+    for (const o of m.children) {
+      if (!o.isMesh) continue;
+      o.geometry = o.geometry.clone();       // いっぴき ずつ くねらせる
+      o.frustumCulled = false;
+      const pos = o.geometry.attributes.position;
+      const base = Float32Array.from(pos.array);
+      const e = new Float32Array(pos.count), kz = new Float32Array(pos.count);
+      for (let i = 0; i < pos.count; i++) {
+        const z = base[i * 3 + 2];
+        e[i] = env(z);
+        kz[i] = cfg.k * (cfg.z0 - z);
+      }
+      bend.push({ pos, base, e, kz });
+    }
+  }
+  return { J, cfg, env, bend, top: Object.values(J).filter((j) => j.parent === m) };
+}
+// からだを くねらせ、からだに ついた ふし（あし・えら）も いっしょに うごかす
+function applyBend(rig, amp, ph) {
+  const { cfg, env, bend, top } = rig;
+  if (!cfg) return;
+  for (const b of bend) {
+    const a = b.pos.array;
+    for (let i = 0; i < b.e.length; i++) a[i * 3] = b.base[i * 3] + amp * b.e[i] * Math.sin(ph - b.kz[i]);
+    b.pos.needsUpdate = true;
+  }
+  const off = (z) => amp * env(z) * Math.sin(ph - cfg.k * (cfg.z0 - z));
+  for (const j of top) {
+    const z = j.userData.p0.z;
+    j.position.x += off(z);
+    j.rotation.y += Math.atan((off(z + 0.01) - off(z - 0.01)) / 0.02);
+  }
+}
+// あるく・およぐ：ななめの あしが いっしょに。A：まえうしろの ふり、lift：もちあげ
+function gait(J, ph, A, lift) {
+  for (const [fb, side, o] of [['F', 'R', 0], ['H', 'L', 0], ['F', 'L', Math.PI], ['H', 'R', Math.PI]]) {
+    const j1 = J[`leg${fb}${side}`], j2 = J[`leg${fb}${side}2`];
+    if (!j1) continue;
+    const s = side === 'R' ? 1 : -1, u = ph + o;
+    j1.rotation.y += -s * A * Math.sin(u);
+    const l = lift * Math.max(0, Math.cos(u));
+    j1.rotation.z += s * l;
+    if (j2) j2.rotation.z -= s * l * 0.7;
+  }
+}
+
 export function createBiotope(container, { onSelect }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -357,21 +424,21 @@ export function createBiotope(container, { onSelect }) {
     m.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = true;
-      // たまごの ゼリーは すける
-      if (/jelly|string/.test(o.name)) {
+      // たまごの ゼリー・オタマジャクシの ひれは すける
+      if (/jelly|string|_fin/.test(o.name)) {
         o.material = o.material.clone();
-        Object.assign(o.material, { transparent: true, opacity: 0.55, depthWrite: false });
+        Object.assign(o.material, { transparent: true, opacity: /_fin/.test(o.name) ? 0.5 : 0.55, depthWrite: false });
       }
     });
     g.add(m);
     g.scale.setScalar(s);
     g.userData.petId = a.id;
-    const tail = m.getObjectByName('tail');
+    const rig = rigModel(m, name);
     const p = spot(a.species, a.key) || [0, 0];
     g.position.set(p[0], yAt(a.species, a.key, p[0], p[1], p[2]), p[1]);
     g.rotation.y = Math.random() * Math.PI * 2;
     animalsLayer.add(g);
-    return { a, g, tail, b: behavior(a.species, a.key), from: g.position.clone(), to: g.position.clone(), t: 1, wait: Math.random() * 3, phase: Math.random() * 10, hop: 0 };
+    return { a, g, m, rig, name, b: behavior(a.species, a.key), from: g.position.clone(), to: g.position.clone(), t: 1, wait: Math.random() * 3, phase: Math.random() * 10, ph: 0, shy: 0 };
   }
 
   function next(act) {
@@ -391,6 +458,82 @@ export function createBiotope(container, { onSelect }) {
     act.dur = Math.max(0.6, dist / speed);
     act.t = 0;
     act.yaw = Math.atan2(act.to.x - act.from.x, act.to.z - act.from.z);
+  }
+
+  // ふしを うごかす（まいかい もとの しせいから）
+  function animate(act, dt, t, moving) {
+    const { J } = act.rig;
+    for (const j of Object.values(J)) {
+      j.position.copy(j.userData.p0);
+      j.rotation.copy(j.userData.r0);
+      j.scale.set(1, 1, 1);
+    }
+    const n = act.name;
+    if (n === 'kaeru_tadpole' || n === 'kaeru_legs') {
+      // しっぽを ふって およぐ。あしが ある ときは うしろあしで けりも
+      act.ph += dt * (moving ? 17 : 5);
+      applyBend(act.rig, moving ? 0.05 : 0.016, act.ph);
+      if (J.hipR) {
+        const k = moving ? Math.sin(act.ph * 0.5) : 0.1 * Math.sin(t * 2 + act.phase);
+        for (const [side, s] of [['R', 1], ['L', -1]]) {
+          J[`hip${side}`].rotation.y += s * 0.45 * k;
+          J[`knee${side}`].rotation.y -= s * 0.6 * Math.max(0, k);
+        }
+      }
+    } else if (n === 'kaeru_adult') {
+      // ジャンプ：とびだす とき うしろあしを のばし、ちゃくちで たたむ
+      let ext = 0;
+      if (moving && act.b === 'hop') {
+        const u = act.t;
+        ext = u < 0.18 ? u / 0.18 : u < 0.55 ? 1 : Math.max(0, 1 - (u - 0.55) / 0.35);
+        ext = ext * ext * (3 - 2 * ext);
+        act.m.rotation.x = -0.45 * ext * (u < 0.5 ? 1 : Math.max(0, 1 - (u - 0.5) * 2.5));
+      } else act.m.rotation.x = 0;
+      for (const [side, s] of [['R', 1], ['L', -1]]) {
+        J[`hip${side}`].rotation.y += s * ext * 1.9;
+        J[`knee${side}`].rotation.y -= s * ext * 2.5;
+        J[`ankle${side}`].rotation.y += s * ext * 2.6;
+        J[`sh${side}`].rotation.y -= s * ext * 0.6;
+        J[`el${side}`].rotation.x -= ext * 0.5;
+      }
+      // じっと している ときは ときどき のどを ふくらませて なく
+      if (!moving && Math.sin(t * 0.35 + act.phase) > 0.55) {
+        const q = Math.max(0, Math.sin(t * 9 + act.phase));
+        J.throat.scale.set(1 + 0.45 * q, 1 + 1.1 * q, 1 + 0.35 * q);
+      }
+    } else if (n === 'kame') {
+      const inWater = act.g.position.y < WATER - 0.03;
+      if (moving) {
+        act.ph += dt * (inWater ? 4 : 5);
+        gait(J, act.ph, inWater ? 0.65 : 0.42, inWater ? 0 : 0.28);
+      } else if (inWater) {
+        act.ph += dt * 1.3;
+        gait(J, act.ph, 0.15, 0);
+      }
+      // ときどき くびを ひっこめる、きょろきょろ
+      const want = !moving && Math.sin(t * 0.13 + act.phase) > 0.9 ? 1 : 0;
+      act.shy += (want - act.shy) * Math.min(1, dt * 4);
+      J.neck.position.z -= 0.075 * act.shy;
+      J.neck.rotation.y += 0.45 * Math.sin(t * 0.4 + act.phase) * (moving ? 0.3 : 1) * (1 - act.shy);
+      J.head.rotation.x += 0.15 * Math.sin(t * 0.7 + act.phase) - 0.1 * act.shy;
+      J.tail.rotation.y += 0.3 * Math.sin(act.ph);
+    } else if (n === 'sansho_larva' || n === 'sansho_adult') {
+      // からだを くねらせて あるく（あしは ななめの くみで）
+      if (moving) {
+        act.ph += dt * 5;
+        gait(J, act.ph, 0.55, 0.35);
+        applyBend(act.rig, 0.035, act.ph);
+      } else {
+        act.ph += dt * 0.8;
+        applyBend(act.rig, 0.008, act.ph);
+      }
+      if (J.gillR) {
+        for (const [side, s] of [['R', 1], ['L', -1]]) {
+          J[`gill${side}`].rotation.y += s * 0.25 * Math.sin(t * 2.5 + act.phase);
+          J[`gill${side}`].rotation.z += s * 0.15 * Math.sin(t * 3.1 + act.phase);
+        }
+      }
+    }
   }
 
   const clock = new THREE.Clock();
@@ -418,9 +561,7 @@ export function createBiotope(container, { onSelect }) {
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         g.rotation.y += dy * Math.min(1, dt * (act.b === 'hop' ? 12 : 3));
       }
-      const moving = act.t < 1;
-      if (act.tail) act.tail.rotation.y = Math.sin(t * (moving ? 10 : 3) + act.phase) * (moving ? 0.5 : 0.15);
-      if (act.b === 'swimWet' || act.b === 'deep') g.rotation.z = Math.sin(t * 4 + act.phase) * 0.04;
+      animate(act, dt, t, act.t < 1);
     }
     if (wheel) wheel.rotation.z -= dt * 0.6;
     for (const m of waterMats) { m.normalMap.offset.x = (t * 0.012) % 1; m.normalMap.offset.y = (t * 0.007) % 1; }
@@ -552,6 +693,7 @@ export function createBiotope(container, { onSelect }) {
       }
     },
     // たしかめ よう
+    _actors: actors,
     advance(sec) { for (let i = 0; i < sec / 0.05; i++) step(0.05, i * 0.05); },
     snapshot() { controls.update(); renderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.85); },
     view(pos, target) { camera.position.set(...pos); controls.target.set(...target); controls.update(); },

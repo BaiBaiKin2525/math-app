@@ -30,7 +30,7 @@ const MODELS = [
   // ビオトープ（blender/biotope.py）
   ['blender/biotope.py', 'bio_terrain', ['terrain'], { tex: 2048 }],
   ['blender/biotope.py', 'bio_props', ['props']],
-  ['blender/biotope.py', 'bio_animals', ['animals']],
+  ['blender/biotope.py', 'bio_animals', ['animals'], { tex: 1024 }],
 ];
 
 const only = process.argv[2];
