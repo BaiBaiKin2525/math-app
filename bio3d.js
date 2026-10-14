@@ -105,7 +105,7 @@ function waterNormalTexture() {
 // いきもの：すがたごとの モデルと おおきさ
 const LOOKS = {
   // ほんとうより ずっと おおきく（けしきの なかで みえる ように）
-  kaeru: { egg: ['kaeru_egg', 1.6], tadpole: ['kaeru_tadpole', 2.0], legs: ['kaeru_legs', 2.2], froglet: ['kaeru_adult', 1.1], adult: ['kaeru_adult', 2.0] },
+  kaeru: { egg: ['kaeru_egg', 1.6], tadpole: ['kaeru_tadpole', 0.75], legs: ['kaeru_legs', 0.9], froglet: ['kaeru_adult', 0.6], adult: ['kaeru_adult', 1.0] },   // カエルは スイレンの はに のれる くらい
   kame: { egg: ['kame_egg', 1.8], baby: ['kame', 0.65], young: ['kame', 1.05], adult: ['kame', 1.55] },
   sansho: { egg: ['sansho_egg', 1.5], larva: ['sansho_larva', 0.9], child: ['sansho_adult', 0.95], adult: ['sansho_adult', 1.8] },
 };
