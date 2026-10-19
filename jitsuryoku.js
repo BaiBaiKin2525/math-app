@@ -1,6 +1,6 @@
 // じつりょく テスト：その ひに 5セット おわると ひらく（1にち 1かい）。
 //   もんだいは がくねんに あわせて、けいさん と じゅけんの どだい から ランダムに 10もん（はんぶん ずつ）
-//   てんすう（1かいめで せいかい 1もん 10てん ＋ はやさ ボーナス）が そのまま ゲームの げんき⚡ に なる
+//   てんすう（1かいめで せいかい 1もん 10てん ＋ はやさ ボーナス）が そのまま ゲーム（ネオン ロボファーム）の ロボの でんち🔋 に なる
 //   あとで にがてな ところを みて だす ように したい ので、1もんずつ きろくする（saveTestResult）
 //   ルールは rewards.js の TEST_RULES
 
@@ -54,9 +54,9 @@ function testCard() {
   const card = document.createElement('button');
   card.className = 'test-card' + (s.open ? ' open' : s.done ? ' done' : ' locked');
   let sub;
-  if (s.debug) sub = '🛠 デバッグ：いつでも なんかいでも（げんきは おくらない）';
+  if (s.debug) sub = '🛠 デバッグ：いつでも なんかいでも（でんちは おくらない）';
   else if (s.done) sub = `きょうは おわり！ ${s.done.score}てん ⚡+${s.done.score}・また あした`;
-  else if (s.open) sub = `⚡ ゲームの げんきが もらえる！ ${TEST_RULES.questions}もん`;
+  else if (s.open) sub = `🔋 ロボの でんちが じゅうでん できる！ ${TEST_RULES.questions}もん`;
   else sub = `🔒 きょう ${s.need}セット おわると ひらくよ（いま ${Math.min(s.sets, s.need)}/${s.need}）`;
   card.innerHTML = `<span class="t">📝 じつりょく テスト</span><span class="d">${sub}</span>`;
   card.addEventListener('click', () => {
@@ -95,15 +95,15 @@ function finishTest() {
   $('result-text').innerHTML = `${score}てん！<small>${total}もん ちゅう ${correct}もん せいかい・かかった じかん ${formatTime(ms)}</small>`;
   $('result-wrong').innerHTML = '';
   $('result-points').innerHTML = `
-    <div class="earned-total">ゲームの げんき ⚡ +${debug ? 0 : score}</div>
+    <div class="earned-total">ロボの でんち 🔋 +${debug ? 0 : score}</div>
     <ul class="earned-list">
       <li><span>せいかい ${correct}もん × ${R.perQuestion}</span><b>+${correct * R.perQuestion}</b></li>
       <li><span>はやく せいかい ${fast}もん × ${R.fastBonus}</span><b>+${fast * R.fastBonus}</b></li>
     </ul>
     <div class="earned-cap">${debug
-      ? '🛠 デバッグちゅう：ゲームの げんきは むせいげん なので おくらないよ'
+      ? '🛠 デバッグちゅう：ロボの でんちは むせいげん なので おくらないよ'
       : `${full}てん まんてん。また あした ちょうせん しよう！`}</div>
-    <a class="big-btn green game-link" href="${GAME_URL}">🌾 ゲームで あそぶ</a>`;
+    <a class="big-btn green game-link" href="${GAME_URL}">🤖 ロボファームで あそぶ</a>`;
   $('result-extra').innerHTML = `<ol class="test-list">${rows.map((r) =>
     `<li class="${r.ok ? 'ok' : 'ng'}"><b>${r.ok ? '⭕' : r.done ? '✖' : 'ー'}</b>${r.fast ? '<i>⚡</i>' : ''}
       <span>${GROUP_ICONS[r.level.group] || ''} ${r.level.title}</span></li>`).join('')}</ol>`;

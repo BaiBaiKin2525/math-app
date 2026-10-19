@@ -203,7 +203,7 @@ function awardSet({ correct, total, full, level, wrong = 0 }) {
   return { items, got, points: w.points, capped: study < wanted, day };
 }
 
-// ---------- じつりょく テスト → ゲームの げんき ----------
+// ---------- じつりょく テスト → ゲームの でんち ----------
 // テストの ルール。かえる ときは ここだけ
 const TEST_RULES = {
   unlockSets: 5,       // その ひに 5セット おわると ひらく（1にち 1かい）
@@ -239,7 +239,7 @@ function testStatus(id) {
   return { sets: day.sets, need: TEST_RULES.unlockSets, done, debug, open: debug || (!done && day.sets >= TEST_RULES.unlockSets) };
 }
 
-// 実力テストが おわったら よぶ。score（てんすう）が そのまま ゲームの げんきに なる
+// 実力テストが おわったら よぶ。score（てんすう）が そのまま ゲームの でんちに なる
 //   ゲーム（myson-game）は この キーを よむ だけ。とりこんだ id を ゲームの セーブで おぼえる ので、ここは ついか だけ
 function grantGameStamina(score, reason = 'じつりょくテスト') {
   const profile = currentProfile();
@@ -256,9 +256,9 @@ function grantGameStamina(score, reason = 'じつりょくテスト') {
   writeJSON(key, arr.slice(-200));
 }
 
-// ---------- デバッグ（ゲームの げんき むせいげん） ----------
+// ---------- デバッグ（ゲームの でんち むせいげん） ----------
 // 保護者メニューで あいことば「claude」を 入れると オン（この端末だけ）。
-// ゲームは この キーを よんで げんきを へらさない。テストは いつでも なんかいでも できるが、げんきは おくらず きろくも しない
+// ゲームは この キーを よんで でんちを へらさない。テストは いつでも なんかいでも できるが、でんちは おくらず きろくも しない
 const GAME_UNLIMITED_KEY = 'mathapp.v1.game.unlimited';
 const GAME_DEBUG_WORD = 'claude';
 

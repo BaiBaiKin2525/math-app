@@ -184,7 +184,7 @@ function renderHomeBar() {
       <button id="pets-btn" class="pets-btn">🐜 むしの おへや</button>
       <button id="fish-btn" class="pets-btn fish-btn">🐟 さかなの おへや</button>
       <button id="bio-btn" class="pets-btn bio-btn">🐸 ビオトープ</button>
-      <a class="pets-btn game-btn" href="${GAME_URL}">🌾 おじいちゃんの いえ</a>
+      <a class="pets-btn game-btn" href="${GAME_URL}">🤖 ネオン ロボファーム</a>
     </div>`;
   $('who-btn').addEventListener('click', renderWho);
   $('pets-btn').addEventListener('click', openPets);

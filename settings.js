@@ -129,8 +129,8 @@ async function openSettings() {
            <button id="adult-on" class="big-btn orange">大人モードに する</button></div><p id="adult-msg" class="set-note"></p>`}
     </section>
     <section class="set-block">
-      <h3>デバッグ（ゲームの げんき無制限）</h3>
-      <p class="set-note">あいことばを入れると、この端末では ゲームの げんきが減らなくなり、実力テストも いつでも何回でも できます（デバッグ中の テストは げんきを送らず、記録もしません）。</p>
+      <h3>デバッグ（ロボの でんち無制限）</h3>
+      <p class="set-note">あいことばを入れると、この端末では ゲームの ロボの でんちが減らなくなり（とまっている ロボも めをさます）、実力テストも いつでも何回でも できます（デバッグ中の テストは でんちを送らず、記録もしません）。</p>
       ${isGameUnlimited()
         ? '<p class="set-adult-on">✅ いま デバッグ中です</p><button id="debug-off" class="big-btn gray">デバッグを やめる</button>'
         : `<div class="set-buttons"><input id="debug-pw" class="set-pw" type="password" autocomplete="off" placeholder="あいことば">
