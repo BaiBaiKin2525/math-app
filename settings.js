@@ -127,7 +127,36 @@ async function openSettings() {
         ? '<p class="set-adult-on">✅ いま 大人モードです</p><button id="adult-off" class="big-btn gray">大人モードを やめる</button>'
         : `<div class="set-buttons"><input id="adult-pw" class="set-pw" type="password" autocomplete="off" placeholder="パスワード">
            <button id="adult-on" class="big-btn orange">大人モードに する</button></div><p id="adult-msg" class="set-note"></p>`}
+    </section>
+    <section class="set-block">
+      <h3>デバッグ（ゲームの げんき無制限）</h3>
+      <p class="set-note">あいことばを入れると、この端末では ゲームの げんきが減らなくなり、実力テストも いつでも何回でも できます（デバッグ中の テストは げんきを送らず、記録もしません）。</p>
+      ${isGameUnlimited()
+        ? '<p class="set-adult-on">✅ いま デバッグ中です</p><button id="debug-off" class="big-btn gray">デバッグを やめる</button>'
+        : `<div class="set-buttons"><input id="debug-pw" class="set-pw" type="password" autocomplete="off" placeholder="あいことば">
+           <button id="debug-on" class="big-btn orange">デバッグに する</button></div><p id="debug-msg" class="set-note"></p>`}
     </section>`;
+
+  if ($('debug-on')) {
+    const tryDebug = () => {
+      if ($('debug-pw').value.trim() !== GAME_DEBUG_WORD) {
+        $('debug-msg').textContent = 'あいことばが ちがいます';
+        return;
+      }
+      setGameUnlimited(true);
+      openSettings();
+      renderHomeIfShown();
+    };
+    $('debug-on').addEventListener('click', tryDebug);
+    $('debug-pw').addEventListener('keydown', (e) => e.key === 'Enter' && tryDebug());
+  }
+  if ($('debug-off')) {
+    $('debug-off').addEventListener('click', () => {
+      setGameUnlimited(false);
+      openSettings();
+      renderHomeIfShown();
+    });
+  }
 
   if ($('adult-on')) {
     const tryIt = async () => {

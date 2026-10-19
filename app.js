@@ -33,7 +33,9 @@ const state = {
   mistake: false,    // この もんだいで 1かいでも まちがえたか
   results: [],       // { a, b, firstOk }
   isRetry: false,
+  test: null,        // じつりょく テスト ちゅう（1もんごとに state.level が かわる）
   startedAt: 0,
+  qStartedAt: 0,     // いまの もんだいを だした じこく（テストの はやさ ボーナス）
   timerId: null,
   countToken: 0,     // 「かぞえる」アニメを止めるための番号
   locked: false,     // ⭕ を出している間は入力させない
@@ -144,6 +146,7 @@ function renderWho() {
     const card = document.createElement('button');
     card.className = 'who-card';
     card.innerHTML = `<span class="who-icon">${p.icon}</span><span class="who-name">${p.name}</span>
+      <span class="who-grade">${gradeLabel(gradeOf(p.id))}</span>
       <span class="who-points">⭐ ${pointsText(todayStatus(p.id).points)}</span>`;
     card.addEventListener('click', () => {
       setCurrentProfile(p.id);
@@ -230,6 +233,7 @@ function renderHome() {
   root.innerHTML = '';
   // きょう もう やった もんだい（「きょう はじめて +5」を だす ため）
   const todayLevels = (loadWallet(currentProfile().id).days[todayKey()] || {}).levels || [];
+  root.appendChild(testCard());
   const groups = [...new Set(LEVELS.map((l) => l.group))];
   const open = loadOpenGroups();
   for (const g of groups) {
@@ -335,9 +339,9 @@ function curStep() {
   return state.steps[state.stepIndex];
 }
 
-function startLevel(level, questions, isRetry) {
+function startLevel(level, questions, isRetry, test = null) {
   Object.assign(state, {
-    level, questions, isRetry,
+    level, questions, isRetry, test,
     index: 0, results: [], startedAt: Date.now(),
   });
   $('quiz').classList.remove('free-mode');
@@ -351,6 +355,8 @@ function startLevel(level, questions, isRetry) {
 }
 
 function showQuestion() {
+  if (state.test) state.level = current().testLevel;   // テストは 1もんずつ ちがう もんだい
+  state.qStartedAt = Date.now();
   const type = state.level.type;
   state.steps = buildSteps(type, current());
   state.stepIndex = 0;
@@ -418,7 +424,7 @@ function setupTools(type) {
   $('hide-btn').style.display = canHide(type) ? '' : 'none';
   // もともと ひっさん だけの レベルは きりかえ なし
   const canToggle = TILE_TYPES.includes(type) && !(type === 'addn' && state.level.tiles === false);
-  $('tiles-btn').style.display = canToggle ? '' : 'none';
+  $('tiles-btn').style.display = canToggle && !state.test ? '' : 'none';
   $('tiles-btn').textContent = off ? '🔢 タイル：なし' : '🧱 タイル：あり';
   $('tiles-btn').classList.toggle('off', off);
   updateHideBtn();
@@ -480,13 +486,14 @@ function enterStep() {
 }
 
 function advanceStep() {
+  if (!$('quiz').classList.contains('active')) return;   // やめた あとに のこった タイマー
   state.stepIndex++;
   if (state.stepIndex < state.steps.length) enterStep();
   else finishQuestion();
 }
 
 function finishQuestion() {
-  state.results[state.index] = { ...current(), firstOk: !state.mistake };
+  state.results[state.index] = { ...current(), firstOk: !state.mistake, ms: Date.now() - state.qStartedAt };
   goNext();
 }
 
@@ -950,6 +957,7 @@ function updateFree() {
 // ---------- けっか ----------
 
 function finish() {
+  if (state.test) return finishTest();
   clearInterval(state.timerId);
   state.countToken++;
   const ms = Date.now() - state.startedAt;
@@ -970,6 +978,7 @@ function finish() {
   $('result-extra').innerHTML = '';
   renderEarned(awardSet({ correct, total, full: !state.isRetry, level: state.level }));
   $('retry-wrong').style.display = wrong.length ? '' : 'none';
+  $('retry-all').style.display = '';
   $('retry-wrong').onclick = () =>
     startLevel(state.level, shuffle(wrong.map(({ a, b }) => ({ a, b }))), true);
   $('retry-all').onclick = () => startLevel(state.level, state.level.make(), false);
@@ -998,6 +1007,11 @@ $('hide-btn').addEventListener('click', () => {
   updateHideBtn();
 });
 $('quit').addEventListener('click', () => {
+  // テストは やめても ここまでの てんすうで おわり（1にち 1かい）
+  if (state.test) {
+    if (confirm('やめる？ ここまでの てんすうで おわりに なるよ')) finishTest();
+    return;
+  }
   if (!$('quiz').classList.contains('free-mode') && !confirm('やめて もどる？')) return;
   renderHome();
 });
@@ -1024,11 +1038,6 @@ document.addEventListener('keydown', (e) => {
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
-
-$('who-add').addEventListener('click', () => {
-  addProfile();
-  renderWho();
-});
 
 // タブレットを きょうだいで つかうので、ひらく たびに「だれが やる？」から
 renderWho();

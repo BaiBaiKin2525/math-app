@@ -1247,3 +1247,31 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 
 /* タイル あり／なし */
 .tiles-btn.off { background: #eef4ff; border-color: #9cb8ef; color: #2f55a0; }
+
+/* ---------- じつりょく テスト ---------- */
+.test-card {
+  width: 100%;
+  margin: 4px 0 8px;
+  padding: 16px 20px;
+  border-radius: var(--radius);
+  border: 3px solid var(--line);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+.test-card .t { font-size: 26px; font-weight: bold; }
+.test-card .d { font-size: 17px; color: var(--sub); }
+.test-card.open { border-color: var(--lit); background: #fff6cf; box-shadow: 0 4px 0 #f0c400; }
+.test-card.open .d { color: #8a6400; font-weight: bold; }
+.test-card.open:active { transform: translateY(3px); box-shadow: 0 1px 0 #f0c400; }
+.test-card.done .d { color: var(--green); }
+.test-card.locked { opacity: .75; }
+.game-link { display: block; margin-top: 12px; text-decoration: none; }
+.test-list { list-style: none; margin: 0; padding: 0; font-size: 18px; text-align: left; columns: 2; column-gap: 24px; }
+.test-list li { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; break-inside: avoid; }
+.test-list li.ng span { color: var(--red); }
+.test-list li i { font-style: normal; }
+.who-grade { font-size: 16px; color: var(--sub); }
+@media (max-width: 600px) { .test-list { columns: 1; } }

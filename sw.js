@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v55';
+const VERSION = 'v56';
 const FILES = [
   './',
   'index.html',
@@ -27,6 +27,7 @@ const FILES = [
   'ichinen2.js',
   'app.js',
   'timeattack.js',
+  'jitsuryoku.js',
   'flatroom.js',
   'pets.js',
   'pet3d.js',

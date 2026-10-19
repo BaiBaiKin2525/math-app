@@ -200,6 +200,7 @@ function taEnd() {
   renderEarned(awardSet({ correct: ta.correct, total: ta.correct + ta.wrong, full: true, level: ta.level, wrong: ta.wrong }));
 
   $('retry-wrong').style.display = 'none';
+  $('retry-all').style.display = '';
   $('retry-all').onclick = () => startTimeAttack(ta.level);
   show('result');
 }
