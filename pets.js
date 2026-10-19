@@ -567,7 +567,7 @@ function openShop(tab) {
   if (tab) pets.shopTab = tab;
   const points = usablePoints(currentProfile().id);
   $('shop-points').innerHTML = `⭐ <b>${pointsText(points)}</b> pt`;
-  document.querySelectorAll('.shop-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === pets.shopTab));
+  document.querySelectorAll('#shop .shop-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === pets.shopTab));
   const maxCase = Math.max(...pets.data.cases.map((c) => CASES[c.type].size));
   const rows = [];
   if (pets.shopTab === 'bug') {
@@ -815,4 +815,4 @@ $('zukan-close').addEventListener('click', () => {
 });
 $('shop-close').addEventListener('click', closeShop);
 $('notice-ok').addEventListener('click', () => $('notice').classList.add('hidden'));
-document.querySelectorAll('.shop-tab').forEach((b) => b.addEventListener('click', () => openShop(b.dataset.tab)));
+document.querySelectorAll('#shop .shop-tab').forEach((b) => b.addEventListener('click', () => openShop(b.dataset.tab)));
