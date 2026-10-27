@@ -310,9 +310,10 @@ function buildSteps(type, q) {
       return kufuSteps(q);
     case 'addn':
       // いちの くらいから じゅんに。くりあがりが あれば 「1 + 4 + 3」の ように たす
-      return addColumns(a, b).filter((c) => !c.auto).map((c) => ({
+      // 3つ・4つ たす ときも おなじ（その くらいに すうじが ない かずは とばす）
+      return addColumnsN(numsOf(q)).filter((c) => !c.auto).map((c) => ({
         kind: 'answer', expected: c.sum, place: c.place,
-        formula: [c.carryIn || null, c.da, c.db].filter((v) => v !== null).join(' + '),
+        formula: [c.carryIn || null, ...c.digits].filter((v) => v !== null).join(' + '),
       }));
     case 'mul2': {
       const regions = splitRegions(a, b);
@@ -416,6 +417,13 @@ function renderSide() {
   const view = state.view;
   const show = state.level.type === 'addn' && hasTiles() && view && view.hissanHTML;
   $('side').innerHTML = show ? view.hissanHTML() : '';
+  if (show) fitSide();
+}
+// みぎの ひっさんを あいている ばしょ いっぱいに（たてむきは テンキーの よこ、よこむきは テンキーの うえ）
+function fitSide() {
+  const right = $('side').parentElement, pad = $('keypad'), msg = $('message');
+  if (matchMedia('(orientation: portrait)').matches) fitHissan($('side'), right.clientWidth - pad.offsetWidth - 90, pad.offsetHeight * 0.85, 30, 64);
+  else fitHissan($('side'), right.clientWidth - 16, right.clientHeight - pad.offsetHeight - msg.offsetHeight - 48, 30, 96);
 }
 
 function setupTools(type) {
@@ -633,7 +641,9 @@ function renderFormula(answerColor) {
   if (step && step.formula) {
     el.classList.toggle('long', step.formula.length > 8);
     el.innerHTML = `
-      <div class="formula-main"><span class="num-a">${q.a}</span> ${OPS[type]} <span class="num-b">${q.b}</span> ＝ ？</div>
+      <div class="formula-main">${type === 'addn'
+        ? numsOf(q).map((v, i) => `<span class="num-${'abcd'[i]}">${v}</span>`).join(' + ')
+        : `<span class="num-a">${q.a}</span> ${OPS[type]} <span class="num-b">${q.b}</span>`} ＝ ？</div>
       <div class="formula-line"><span>${step.formula}</span><span>=</span>${box}</div>`;
   } else {
     el.innerHTML = `
@@ -736,7 +746,8 @@ function resolvePlace(step, isLast) {
   state.view.resolve(step.place);
   renderSide();
   const q = current();
-  if (isLast) say(`こたえは ${q.a + q.b}`);
+  if (isLast) say(`こたえは ${numsOf(q).reduce((s, v) => s + v, 0)}`);
+  else if (step.expected >= 20) say(`10 の まとまりが ${Math.floor(step.expected / 10)}つ。となりの くらいへ ${Math.floor(step.expected / 10)} くりあがり！`);
   else if (step.expected >= 10) say('10 こ あつまったので となりの くらいへ 1 くりあがり！');
 }
 
@@ -974,14 +985,14 @@ function finish() {
   $('result-text').innerHTML = `${total}もん ちゅう ${correct}もん せいかい！<small>かかった じかん ${formatTime(ms)}</small>`;
   const op = OPS[state.level.type];
   $('result-wrong').innerHTML = wrong.length
-    ? 'まちがえた もんだい： ' + wrong.map((r) => r.label || `${r.a} ${op} ${r.b}`).join('、 ')
+    ? 'まちがえた もんだい： ' + wrong.map((r) => r.label || (r.nums ? r.nums.join(' + ') : `${r.a} ${op} ${r.b}`)).join('、 ')
     : '';
   $('result-extra').innerHTML = '';
   renderEarned(awardSet({ correct, total, full: !state.isRetry, level: state.level }));
   $('retry-wrong').style.display = wrong.length ? '' : 'none';
   $('retry-all').style.display = '';
   $('retry-wrong').onclick = () =>
-    startLevel(state.level, shuffle(wrong.map(({ a, b }) => ({ a, b }))), true);
+    startLevel(state.level, shuffle(wrong.map(({ a, b, nums }) => (nums ? { a, b, nums } : { a, b }))), true);
   $('retry-all').onclick = () => startLevel(state.level, state.level.make(), false);
   show('result');
 }
@@ -1025,7 +1036,10 @@ new ResizeObserver(([entry]) => {
   const key = `${Math.round(width)}x${Math.round(height)}`;
   if (key === lastBox || !state.view || !$('quiz').classList.contains('active')) return;
   lastBox = key;
-  requestAnimationFrame(() => state.view.layout());
+  requestAnimationFrame(() => {
+    state.view.layout();
+    if ($('side').innerHTML) fitSide();
+  });
 }).observe($('visual'));
 
 // パソコンで試すとき用：キーボードでも入力できる

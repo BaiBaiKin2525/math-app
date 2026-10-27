@@ -6,20 +6,35 @@ const PLACE_NAMES = ['いち', 'じゅう', 'ひゃく', 'せん'];
 const digitAt = (n, p) => Math.floor(n / 10 ** p) % 10;
 const lenOf = (n) => String(n).length;
 
-// くらいごとの けいさん。auto：くりあがり だけで できた くらい（こたえに そのまま かく）
-function addColumns(a, b) {
-  const n = lenOf(a + b);
-  const top = Math.max(lenOf(a), lenOf(b));
+// たす かず（2つ〜4つ）。nums が なければ a と b
+const numsOf = (q) => q.nums || [q.a, q.b];
+
+// くらいごとの けいさん。digits：その くらいに ある すうじ（かずが みじかくて ない ときは null）
+// auto：くりあがり だけで できた くらい（こたえに そのまま かく）。3つ・4つ たすと 2 や 3 くりあがる ことも ある
+function addColumnsN(nums) {
+  const total = nums.reduce((s, v) => s + v, 0);
+  const n = lenOf(total);
+  const top = Math.max(...nums.map(lenOf));
   const cols = [];
   let carry = 0;
   for (let p = 0; p < n; p++) {
-    const da = p < lenOf(a) ? digitAt(a, p) : 0;
-    const db = p < lenOf(b) ? digitAt(b, p) : 0;
-    const sum = carry + da + db;
-    cols.push({ place: p, da, db, carryIn: carry, sum, auto: p >= top });
-    carry = sum >= 10 ? 1 : 0;
+    const digits = nums.map((v) => (p < lenOf(v) ? digitAt(v, p) : null));
+    const sum = carry + digits.reduce((s, d) => s + (d || 0), 0);
+    cols.push({ place: p, digits, da: digits[0] || 0, db: digits[1] || 0, carryIn: carry, sum, auto: p >= top });
+    carry = Math.floor(sum / 10);
   }
   return cols;
+}
+const addColumns = (a, b) => addColumnsN([a, b]);
+
+// ひっさんの もじの おおきさを、はいる ばしょ（maxW × maxH）に あわせる
+function fitHissan(root, maxW, maxH, min = 28, max = 130) {
+  const h = root && root.querySelector('.hissan');
+  if (!h || maxW <= 0 || maxH <= 0) return;
+  h.style.fontSize = '100px';
+  const r = h.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  h.style.fontSize = `${Math.max(min, Math.min(max, 100 * Math.min(maxW / r.width, maxH / r.height)))}px`;
 }
 
 // タイルの かたち（u＝ちいさい しかくの 1 ぺん）と、1 だんに ならべる かず
@@ -32,13 +47,14 @@ const PV_ITEMS = [
 
 // tiles: false なら タイルを ださず、ひっさんを おおきく かく
 function createPlaceValueView(box, q, { tiles = true } = {}) {
-  const cols = addColumns(q.a, q.b);
+  const nums = numsOf(q);
+  const cols = addColumnsN(nums);
   const n = cols.length;
   const view = {
     active: -1,
     done: new Set(),
     written: {},          // くらい → こたえに かいた すうじ
-    carried: new Set(),   // くりあがりが とどいた くらい
+    carried: new Map(),   // くりあがりが とどいた くらい → いくつ
     gone: {},             // くらい → となりへ いった こすう
     popPlace: -1,
   };
@@ -82,6 +98,7 @@ function createPlaceValueView(box, q, { tiles = true } = {}) {
     box.innerHTML = '';
     if (!tiles) {
       box.innerHTML = `<div class="hissan-big">${view.hissanHTML()}</div>`;
+      fitHissan(box, box.clientWidth - 48, box.clientHeight - 28, 36, 130);
       return;
     }
     const r = box.getBoundingClientRect();
@@ -137,12 +154,14 @@ function createPlaceValueView(box, q, { tiles = true } = {}) {
     view.done.add(p);
     if (c.sum >= 10) {
       view.gone[p] = 10;
-      view.carried.add(p + 1);
+      view.carried.set(p + 1, Math.floor(c.sum / 10));
       view.popPlace = p + 1;
-      const next = cols[p + 1];
-      if (next && next.auto) {
-        view.written[p + 1] = next.sum % 10;
-        view.done.add(p + 1);
+      // くりあがり だけの くらいは そのまま かく（その さきへ また くりあがる ことも）
+      for (let k = p + 1; cols[k] && cols[k].auto; k++) {
+        view.written[k] = cols[k].sum % 10;
+        view.done.add(k);
+        if (cols[k].sum < 10) break;
+        view.carried.set(k + 1, Math.floor(cols[k].sum / 10));
       }
     }
     view.draw();
@@ -155,9 +174,11 @@ function createPlaceValueView(box, q, { tiles = true } = {}) {
       `<span class="h-cell${p === view.active ? ' act' : ''}${extra}">${content}</span>`;
     const digitOr = (num, p) => (p < lenOf(num) ? digitAt(num, p) : '');
     let h = `<div class="hissan" style="grid-template-columns: .9em repeat(${n}, 1.15em)">`;
-    h += '<span></span>' + places.map((p) => cell(view.carried.has(p) ? '1' : '', p, ' h-carry')).join('');
-    h += '<span></span>' + places.map((p) => cell(digitOr(q.a, p), p, ' h-a')).join('');
-    h += '<span class="h-op">+</span>' + places.map((p) => cell(digitOr(q.b, p), p, ' h-b')).join('');
+    h += '<span></span>' + places.map((p) => cell(view.carried.get(p) || '', p, ' h-carry')).join('');
+    nums.forEach((num, i) => {
+      const last = i === nums.length - 1;
+      h += (last ? '<span class="h-op">+</span>' : '<span></span>') + places.map((p) => cell(digitOr(num, p), p, ` h-${'abcd'[i]}`)).join('');
+    });
     h += '<span class="h-line"></span>' + places.map((p) =>
       cell(view.written[p] ?? (p === view.active ? '?' : ''), p, ' h-ans')).join('');
     return h + '</div>';

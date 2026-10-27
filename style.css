@@ -428,8 +428,12 @@ h1 {
 .hissan .h-carry { font-size: .45em; color: #d68a00; align-self: end; }
 .hissan .h-a { color: var(--dot-a); }
 .hissan .h-b { color: var(--dot-b); }
+.hissan .h-c { color: #2f9e6a; }
+.hissan .h-d { color: #9a6ad0; }
+.formula .num-c { color: #2f9e6a; }
+.formula .num-d { color: #9a6ad0; }
 .hissan .h-op { color: var(--sub); }
-.hissan .h-ans, .hissan .h-line { border-top: 4px solid var(--ink); }
+.hissan .h-ans, .hissan .h-line { border-top: 4px solid var(--ink); border-radius: 0 0 8px 8px; }
 .hissan .h-ans.act { color: var(--orange); }
 
 .pv { display: grid; column-gap: 28px; row-gap: 10px; align-items: end; }
@@ -490,12 +494,11 @@ h1 {
     column-gap: 24px;
   }
   .right:has(.side:not(:empty)) .message { grid-area: msg; }
-  .right:has(.side:not(:empty)) .side { grid-area: side; }
+  .right:has(.side:not(:empty)) .side { grid-area: side; margin-left: 20px; }
   .right:has(.side:not(:empty)) .keypad { grid-area: keys; }
-  .hissan { font-size: 44px; }
 }
 /* タイルなし（3けた）：ひっさんを えの ばしょに おおきく */
-.hissan-big .hissan { font-size: clamp(64px, 12vh, 120px); }
+.hissan-big { flex: 1; width: 100%; min-height: 0; display: flex; align-items: center; justify-content: center; }
 /* ---------- だれが やる？ ---------- */
 #who { align-items: center; justify-content: center; gap: 24px; }
 .who-list { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }

@@ -10,6 +10,14 @@ function rand(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+// たす かずを count こ（lo〜hi。one の わりあいで 1けた）。いちの くらいで くりあがる ものだけ
+function manyNums(count, lo, hi, one = 0) {
+  let nums;
+  do nums = Array.from({ length: count }, () => (Math.random() < one ? rand(2, 9) : rand(lo, hi)));
+  while (nums.reduce((s, v) => s + (v % 10), 0) < 10 || nums.every((v) => v < 10));
+  return { a: nums[0], b: nums[1], nums };
+}
+
 function shuffle(list) {
   const a = list.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -142,6 +150,22 @@ const LEVELS = [  {
       } while (a % 10 + b % 10 < 10 && Math.floor(a / 10) % 10 + Math.floor(b / 10) % 10 < 10);
       return { a, b };                      // どこかで かならず くりあがる。こたえは 999 まで
     }),
+  },
+  // 3つ・4つの かずを たす（ひっさん だけ）。いちの くらいは かならず くりあがる
+  {
+    id: 'addm3', type: 'addn', group: 'おおきい かずの たしざん',
+    title: '3つの かず', desc: '2けたを 3つ たす（24 + 37 + 18 など）', tiles: false,
+    make: () => generate(QUESTIONS_PER_SET, () => manyNums(3, 11, 79)),
+  },
+  {
+    id: 'addm4', type: 'addn', group: 'おおきい かずの たしざん',
+    title: '4つの かず', desc: '2けたを 4つ たす（2 や 3 くりあがる ことも）', tiles: false,
+    make: () => generate(QUESTIONS_PER_SET, () => manyNums(4, 11, 69)),
+  },
+  {
+    id: 'addmix', type: 'addn', group: 'おおきい かずの たしざん',
+    title: 'ごちゃまぜ', desc: '2つ〜4つの かず・1けたも まじる', tiles: false,
+    make: () => generate(QUESTIONS_PER_SET, () => manyNums(rand(2, 4), 11, 99, 0.3)),
   },
   // かけざん：1〜9 のだん（1〜9 をばらばらの順で 9 もん）
   ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
