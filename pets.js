@@ -80,15 +80,15 @@ const SPECIES = {
     trivia: 'しぜんの なかでは かずが すくなく、みつけるのが とても むずかしい クワガタです。',
   },
   // がいこくの おおきな カブトムシ：せいちゅうで くる。しいくケース（大）に 1ぴきだけ（alone）
-  // adultSize：かった ときの おおきさ（mm）、viewCm：3D での おおきさ
+  // adultSize：かった ときの おおきさ（mm）
   caucasus: {
-    name: 'コーカサスオオカブト', icon: '🪲', price: 5000, caseSize: 3, alone: true, size: [60, 130], adultSize: 115, viewCm: 12.5, life: 150,
+    name: 'コーカサスオオカブト', icon: '🪲', price: 5000, caseSize: 3, alone: true, size: [60, 130], adultSize: 115, life: 150,
     lives: 'インドネシアや マレーシアの やま', eats: 'じゅえき、くだもの',
     text: 'アジアで いちばん おおきい カブトムシ。くろく ひかる からだに、ながい つのが 3ぼん あります。',
     trivia: 'きが あらく、つよい カブトムシ。ながい まえあしで きに しっかり つかまります。',
   },
   hercules: {
-    name: 'ヘラクレスオオカブト', icon: '🪲', price: 5000, caseSize: 3, alone: true, size: [50, 180], adultSize: 150, viewCm: 14, life: 300,
+    name: 'ヘラクレスオオカブト', icon: '🪲', price: 5000, caseSize: 3, alone: true, size: [50, 180], adultSize: 150, life: 300,
     lives: 'みなみアメリカや カリブかいの しまの もり', eats: 'じゅえき、くだもの',
     text: 'せかいで いちばん ながい カブトムシ。むねの ながい つのと あたまの つので あいてを はさみます。',
     trivia: 'きいろい はねは、しめりけが おおいと くろっぽく かわります。',
@@ -326,8 +326,8 @@ function view3d(p) {
   } else if (p.stage === 'pupa') {
     mm *= 0.8;
   }
-  // ちいさい むしも みえる ように すこし おおきめに かく
-  const lengthCm = sp.viewCm && p.stage === 'adult' ? sp.viewCm : Math.max(2.2, Math.min(12, (mm / 10) * 1.3));
+  // ほんものと おなじ おおきさ（ケースも cm）。せいちゅうは つの・あごの さきまでで はかる（3D で あわせる）
+  const lengthCm = p.stage === 'adult' ? mm / 10 : Math.max(1.2, Math.min(12, mm / 10));
   const mood = moodOf(p);
   return { id: p.id, species: p.species, stage: p.stage, lengthCm, sizeRatio, weak: mood.weak, sleeping: !!mood.sleeping };
 }

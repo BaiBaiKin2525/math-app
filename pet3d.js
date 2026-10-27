@@ -698,6 +698,8 @@ function buildBugModel(species, sizeRatio) {
     } else if (jaw) {
       o.scale.setScalar(k);
       jaws.push({ pivot: o, s: jaw[1] === 'L' ? 1 : -1 });
+    } else if (o.name === 'horn' && species === 'kabuto') {
+      o.scale.setScalar(0.45 + 0.4 * sizeRatio); // カブトムシの つのは からだの 3ぶんの 1 くらいまで
     } else if (o.name === 'horn' || o.name === 'horn_T') {
       o.scale.setScalar(k);   // horn_T：むねの つの（コーカサス・ヘラクレス）
     } else if (o.name === 'head') {
@@ -746,6 +748,27 @@ function buildPupaModel(species) {
     if (jawLen) jaws.scale.setScalar(0.55 + 0.45 * jawLen); // コクワガタは みじかく、ノコギリは ながく
   }
   return { group: g, legs: [] };
+}
+
+// せいちゅうの からだの ながさ（あし・しょっかくは いれない。つの・あごの さきまで）。
+// ずかんと おなじ はかりかたで、ほんものの おおきさに あわせる
+function bodyLength(model, p) {
+  if (p.stage !== 'adult') return 1;
+  const g = model.group;
+  g.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const b = new THREE.Box3();
+  const skip = (o) => {
+    for (let q = o; q && q !== g; q = q.parent) if (!q.visible || /^(leg_|ant_)/.test(q.name)) return true;
+    return false;
+  };
+  g.traverse((o) => {
+    if (!o.isMesh || skip(o)) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    box.union(b.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld));
+  });
+  const len = box.isEmpty() ? 1 : box.max.z - box.min.z;
+  return len > 0.2 ? len : 1;
 }
 
 // Blender の モデルが よみこめて いるか
@@ -1007,11 +1030,13 @@ function buildCase(dims) {
   for (const [fw, fd, x, z] of [[w + 1.2, 1.6, 0, d / 2], [w + 1.2, 1.6, 0, -d / 2], [1.6, d + 1.2, w / 2, 0], [1.6, d + 1.2, -w / 2, 0]]) {
     const bar = new THREE.Mesh(new RoundedBoxGeometry(fw, 1.0, fd, 2, 0.35), frame);
     bar.position.set(x, top, z);
+    bar.userData.noCast = true;
     g.add(bar);
   }
   const handle = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
     V(-w * 0.28, top + 0.4, d / 2 - 0.2), V(-w * 0.22, top + 1.4, d / 2 + 0.1), V(0, top + 1.8, d / 2 + 0.2), V(w * 0.22, top + 1.4, d / 2 + 0.1), V(w * 0.28, top + 0.4, d / 2 - 0.2),
   ]), 30, 0.35, 8), frame);
+  handle.userData.noCast = true;
   g.add(handle);
   // まるた（ごつごつした きの かわ・きりくちの としわ）。まえに よこむきに おく
   const logR = w * 0.029;
@@ -1175,15 +1200,27 @@ export function createInsectRoom(container, { onSelect }) {
 
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
+  // むしや まるたの かげを マットに おとす（たって いる ように みえる）
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   // まわりの けしきが からだに うつりこむ（つやつや）
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a6a4a, 0.55));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.3);
-  sun.position.set(8, 20, 12);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a6a4a, 0.45));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  sun.position.set(12, 16, 4); // すこし よこから：かげが まえから みえる
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = 3;
   scene.add(sun);
+  // うしろから の よわい ひかりで からだの ふちを ひからせ、まるみを だす
+  const rim = new THREE.DirectionalLight(0xfff2dd, 0.5);
+  rim.position.set(-10, 8, -16);
+  scene.add(rim);
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 600);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -1240,6 +1277,16 @@ export function createInsectRoom(container, { onSelect }) {
       const toWorld = (p) => def.group.localToWorld(p.clone());
       return { ...def, type, k, busy: null, world: def.path.map(toWorld), exitWorld: (def.exit || []).map(toWorld) };
     }).filter(Boolean);
+    // かげ：すける ガラス・ふたの わくは かげを つくらない
+    caseGroup.traverse((o) => {
+      if (!o.isMesh) return;
+      const clear = [].concat(o.material).some((m) => m.transparent);
+      o.receiveShadow = !clear;
+      o.castShadow = !clear && !o.userData.noCast;
+    });
+    const s = Math.max(w, d) * 0.62 + 2;
+    Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 80 });
+    sun.shadow.camera.updateProjectionMatrix();
     for (const a of actors.values()) stopPlay(a);
     fitCamera();
   }
@@ -1255,7 +1302,7 @@ export function createInsectRoom(container, { onSelect }) {
     // すこし ひくめから：つちの なかの ようちゅうも みえる
     camera.position.set(0, dist * 0.42, dist * 0.9);
     controls.target.set(0, -SOIL * 0.3, 0);
-    controls.minDistance = dist * 0.3;
+    controls.minDistance = dist * 0.12; // ちいさい アリも ちかよって みられる
     controls.maxDistance = dist * 1.5;
     controls.update();
   }
@@ -1272,7 +1319,11 @@ export function createInsectRoom(container, { onSelect }) {
     const g = model.group;
     const len = p.lengthCm;
     g.rotation.order = 'YXZ';
-    g.scale.setScalar(len);
+    g.scale.setScalar(len / bodyLength(model, p));
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    // ちいさい アリも タップ できる ように、みえない あたりの たま
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.6, len * 0.6) / g.scale.x, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+    g.add(hit);
     g.position.copy(randomSpot());
     g.rotation.y = Math.random() * Math.PI * 2;
     // ようちゅう・さなぎ・とうみんちゅうは つちの なか、まえの ガラスぎわ（よこから みえる）
@@ -1362,7 +1413,7 @@ export function createInsectRoom(container, { onSelect }) {
     const a = id && actors.get(id);
     ring.visible = !!a;
     if (a) {
-      ring.scale.setScalar(a.len * 0.7);
+      ring.scale.setScalar(Math.max(0.8, a.len * 0.7));
       if (a.pet.species === 'dango' && a.walker && !a.play) a.rolled = 3; // タップで まるくなる
     }
   }
