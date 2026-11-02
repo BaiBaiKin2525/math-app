@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v60';
+const VERSION = 'v61';
 const FILES = [
   './',
   'index.html',
@@ -14,6 +14,7 @@ const FILES = [
   'nagasa.js',
   'junjo.js',
   'pazuru.js',
+  'tangram.js',
   'suiri.js',
   'kakezan.js',
   'kakudo.js',

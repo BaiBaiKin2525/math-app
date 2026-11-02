@@ -1280,3 +1280,14 @@ button.group-title + .level-grid { margin: 10px 0 6px; padding-left: 12px; borde
 @media (max-width: 600px) { .test-list { columns: 1; } }
 .game-btn { background: #fff3d6; border-color: #e8c27a; color: #7a4f12; text-decoration: none; display: inline-flex; align-items: center; }
 .room-btns .pets-btn { white-space: nowrap; }
+
+/* タングラム */
+.tg-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.tg-shadow { fill: #6f655c; stroke: #6f655c; stroke-width: 1; stroke-linejoin: round; }
+.tg-hint { fill: none; stroke: rgba(255,255,255,.55); stroke-width: 2; stroke-dasharray: 6 5; stroke-linejoin: round; }
+.tg-pc { cursor: grab; touch-action: none; }
+.tg-pc polygon { stroke: rgba(0,0,0,.28); stroke-width: 2; stroke-linejoin: round; }
+.tg-pc.last polygon { stroke: rgba(0,0,0,.55); stroke-width: 3; }
+.tg-pc.drag { cursor: grabbing; filter: drop-shadow(0 6px 6px rgba(0,0,0,.25)); }
+.tg-bad { pointer-events: none; }
+.tg-bad polygon { fill: #e2553f; opacity: .6; }

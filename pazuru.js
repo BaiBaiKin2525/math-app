@@ -30,7 +30,129 @@ const HARD_PUZZLES = [
   ['ABBBC', 'AADCC', 'EEDDC', 'EFFFF'],
   ['AABBB', 'ACCDB', 'ECCDD', 'EFFGD', 'EEFGG'],
 ];
-const PIECE_COLORS = ['#ff8a3d', '#4d96ff', '#3cb46e', '#e2553f', '#9b6bd6', '#f2c230', '#2bb3b1'];
+const PIECE_COLORS = ['#ff8a3d', '#4d96ff', '#3cb46e', '#e2553f', '#9b6bd6', '#f2c230', '#2bb3b1', '#c96f9e'];
+
+// ---------- へいめん パズル：4マス・5マスの いた（テトロミノ・ペントミノ）で かたちを うめる ----------
+// かたちを えらんで、その ばで いたの しきつめかたを ランダムに つくる（かならず とける）
+const TETROMINOES = { I: ['####'], O: ['##', '##'], T: ['###', '.#.'], L: ['###', '#..'], S: ['.##', '##.'] };
+const PENTOMINOES = {
+  F: ['.##', '##.', '.#.'], I: ['#####'], L: ['####', '#...'], N: ['##..', '.###'], P: ['##', '##', '#.'], T: ['###', '.#.', '.#.'],
+  U: ['#.#', '###'], V: ['#..', '#..', '###'], W: ['#..', '##.', '.##'], X: ['.#.', '###', '.#.'], Y: ['####', '.#..'], Z: ['##.', '.#.', '.##'],
+};
+// stage：0＝4マスの いた、1＝5マスの いた 4〜5まい、2＝5マスの いた 6〜8まい
+const HEIMEN_SHAPES = [
+  [
+    { name: 'ながしかく', rows: ['####', '####', '####'] },
+    { name: 'ましかく', rows: ['####', '####', '####', '####'] },
+    { name: 'ほそながい ながしかく', rows: ['######', '######'] },
+    { name: 'かいだん', rows: ['##....', '####..', '######'] },
+    { name: 'じゅうじ', rows: ['.##.', '####', '####', '.##.'] },
+    { name: 'L の じ', rows: ['##..', '##..', '####', '####'] },
+    { name: 'やま', rows: ['..##..', '.####.', '######'] },
+    { name: 'T の じ', rows: ['######', '######', '..##..', '..##..'] },
+  ],
+  [
+    { name: 'ながしかく', rows: ['#####', '#####', '#####', '#####'] },
+    { name: 'ほそながい ながしかく', rows: ['##########', '##########'] },
+    { name: 'ましかく', rows: ['#####', '#####', '#####', '#####', '#####'] },
+    { name: 'おしろ', rows: ['#.#..', '####.', '#####', '#####', '##.##'] },
+    { name: 'かいだん', rows: ['##....', '###...', '####..', '#####.', '######'] },
+    { name: 'じゅうじ', rows: ['.###.', '#####', '#####', '#####', '.#.#.'] },
+    { name: 'ふね', rows: ['...#....', '...##...', '...###..', '########', '.######.'] },
+  ],
+  [
+    { name: 'ながしかく', rows: ['######', '######', '######', '######', '######'] },
+    { name: 'ほそながい ながしかく', rows: ['##########', '##########', '##########'] },
+    { name: 'ながしかく', rows: ['#######', '#######', '#######', '#######', '#######'] },
+    { name: 'おおきな いえ', rows: ['...##...', '..####..', '.######.', '########', '.######.', '.##..##.'] },
+    { name: 'かいだん', rows: ['##......', '#####...', '#######.', '########', '########'] },
+    { name: 'ロケット', rows: ['..##..', '.####.', '.####.', '.####.', '.####.', '######', '######'] },
+  ],
+];
+
+const pzRot = (cells) => normCells(cells.map(([r, c]) => [c, -r]));
+function pzOrients(rows) {
+  let cells = normCells(rows.flatMap((row, r) => [...row].map((ch, c) => (ch === '#' ? [r, c] : null)).filter(Boolean)));
+  const seen = new Set();
+  const out = [];
+  for (let f = 0; f < 2; f++) {
+    for (let k = 0; k < 4; k++) {
+      const key = cells.join(' ');
+      if (!seen.has(key)) { seen.add(key); out.push(cells); }
+      cells = pzRot(cells);
+    }
+    cells = flipCells(cells);
+  }
+  return out;
+}
+
+// rows（'#'＝うめる マス）を いたで しきつめた こたえ（'A','B',… の rows）。maxUse：おなじ いたを つかえる かず
+function tilePolyomino(rows, lib, maxUse) {
+  const H = rows.length, W = rows[0].length;
+  const grid = rows.map((row) => [...row].map((ch) => (ch === '#' ? '' : '.')));
+  const types = Object.keys(lib).map((t) => ({ t, orients: pzOrients(lib[t]), used: 0 }));
+  const size = types[0].orients[0].length;
+  if ((rows.join('').split('#').length - 1) % size) return null;
+  // あいている ところが いたの おおきさで わりきれない かたまりに わかれたら だめ
+  const holesOk = () => {
+    const seen = grid.map((row) => row.map(() => false));
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+      if (grid[r][c] !== '' || seen[r][c]) continue;
+      let n = 0;
+      const st = [[r, c]];
+      seen[r][c] = true;
+      while (st.length) {
+        const [y, x] = st.pop();
+        n++;
+        for (const [y2, x2] of [[y + 1, x], [y - 1, x], [y, x + 1], [y, x - 1]]) {
+          if (y2 >= 0 && y2 < H && x2 >= 0 && x2 < W && !seen[y2][x2] && grid[y2][x2] === '') { seen[y2][x2] = true; st.push([y2, x2]); }
+        }
+      }
+      if (n % size) return false;
+    }
+    return true;
+  };
+  let letter = 0, steps = 0;
+  const go = () => {
+    if (++steps > 20000) return false;
+    let r0 = -1, c0 = -1;
+    outer: for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (grid[r][c] === '') { r0 = r; c0 = c; break outer; }
+    if (r0 < 0) return true;
+    for (const ty of shuffle(types)) {
+      if (ty.used >= maxUse) continue;
+      for (const o of shuffle(ty.orients)) {
+        // いちばん うえ・ひだりの マスを (r0, c0) に あわせる
+        const dr = r0 - o[0][0], dc = c0 - o[0][1];
+        const cells = o.map(([r, c]) => [r + dr, c + dc]);
+        if (!cells.every(([r, c]) => r >= 0 && r < H && c >= 0 && c < W && grid[r][c] === '')) continue;
+        const ch = String.fromCharCode(65 + letter++);
+        cells.forEach(([r, c]) => (grid[r][c] = ch));
+        ty.used++;
+        if (holesOk() && go()) return true;
+        ty.used--;
+        letter--;
+        cells.forEach(([r, c]) => (grid[r][c] = ''));
+      }
+    }
+    return false;
+  };
+  for (let tries = 0; tries < 10; tries++) {
+    steps = 0;
+    if (go()) return grid.map((row) => row.join(''));
+  }
+  return null;
+}
+
+function heimenQuestions(stage) {
+  const lib = stage === 0 ? TETROMINOES : PENTOMINOES;
+  const out = [];
+  for (const s of shuffle(HEIMEN_SHAPES[stage])) {
+    if (out.length >= 5) break;
+    const sol = tilePolyomino(s.rows, lib, stage === 0 ? 2 : 1);
+    if (sol) out.push({ kind: 'puzzle', puzzle: sol, label: `「${s.name}」（${stage === 0 ? 4 : 5}マスの いた）` });
+  }
+  return out;
+}
 
 // マスを 0,0 から に そろえて、うえの だん・ひだりから じゅんに ならべる
 function normCells(cells) {
@@ -59,6 +181,7 @@ function parsePuzzle(rows) {
 
 UNITS.pazuru = {
   questions(opts = {}) {
+    if (opts.heimen !== undefined) return heimenQuestions(opts.heimen);
     if (opts.easy) {
       const qs = shuffle(EASY_PUZZLES).slice(0, 5).map((p) => ({ kind: 'puzzle', puzzle: p, label: `パズル（${p.length}×${p[0].length}）` }));
       qs.push({ kind: 'area', puzzle: EASY_PUZZLES[3], label: `タイルは ${rb('何', 'なん')}まい？` });
@@ -129,7 +252,9 @@ UNITS.pazuru = {
 
     view.draw = () => {
       box.innerHTML = '';
-      const W = box.clientWidth || 600, H = box.clientHeight || 400;
+      const cs = getComputedStyle(box);
+      const W = (box.clientWidth || 600) - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+      const H = (box.clientHeight || 400) - parseFloat(cs.paddingTop || 0) - parseFloat(cs.paddingBottom || 0);
       const areaOnly = q.kind === 'area';
       // いちばん おおきく できる マスの おおきさを さがす（ばんの よこ か した に いたを ならべる）
       const pack = (trayCols) => {
@@ -149,12 +274,12 @@ UNITS.pazuru = {
         best = { cell, wide: false, trayCols: 0 };
       } else {
         for (let cell = 72; cell >= 20 && !best; cell -= 2) {
-          const cw = Math.floor((W - 20) / cell), ch = (H - 20) / cell;
+          const cw = Math.floor((W - 20) / cell), ch = (H - 70) / cell; // したの ボタンの ぶんは あける
           for (const wide of [true, false]) {
             const trayCols = wide ? cw - P.cols - 1 : cw;
             if (trayCols < 3) continue;
             const t = pack(trayCols);
-            const ok = wide ? Math.max(P.rows, t.h) <= ch - 1.2 : P.rows + 1 + t.h <= ch - 1.2;
+            const ok = wide ? Math.max(P.rows, t.h) <= ch : P.rows + 1 + t.h <= ch;
             if (ok && t.w <= trayCols) { best = { cell, wide, trayCols }; break; }
           }
         }
