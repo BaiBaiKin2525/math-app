@@ -1,5 +1,5 @@
 // オフラインで動かすためのキャッシュ。ファイルを変えたら VERSION を上げる。
-const VERSION = 'v61';
+const VERSION = 'v62';
 const FILES = [
   './',
   'index.html',
@@ -18,6 +18,7 @@ const FILES = [
   'suiri.js',
   'kakezan.js',
   'kakudo.js',
+  'kakko.js',
   'tenkai.js',
   'net3d.js',
   'solid3d.js',
