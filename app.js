@@ -225,6 +225,37 @@ function saveOpenGroups(list) {
   }
 }
 
+// ホームの レベルの カード（todayLevels：きょう もう やった もんだい）
+function levelCard(level, todayLevels) {
+  const best = level.type === 'free' ? null : bestOf(level.id);
+  let bestText = '';
+  if (best) {
+    bestText = level.type === 'ta'
+      ? `さいこう ${best.correct}もん`
+      : `さいこう ${best.correct}/${best.total}・${formatTime(best.ms)}`;
+  }
+  const card = document.createElement('button');
+  card.className = `level-card ${level.type}`;
+  // もらえる ポイント（むずかしいほど おおい）
+  let ptText = '';
+  if (level.type !== 'free') {
+    const r = pointRuleFor(level);
+    ptText = r.net ? '⭐ せいかい − まちがい' : `⭐ 1もん ${r.per}pt${r.perfect ? `・ぜんぶ せいかい +${r.perfect}` : ''}`;
+    if (!todayLevels.includes(level.id)) ptText += `・🌅 きょう はじめて +${POINT_RULES.firstOfDay}`;
+  }
+  card.innerHTML = `
+    <span class="t">${level.title}</span>
+    <span class="d">${level.desc}</span>
+    <span class="pt">${ptText}</span>
+    <span class="best">${bestText}</span>`;
+  card.addEventListener('click', () => {
+    if (level.type === 'free') startFree(level);
+    else if (level.type === 'ta') startTimeAttack(level);
+    else startLevel(level, level.make(), false);
+  });
+  return card;
+}
+
 function renderHome() {
   if (!currentProfile()) return renderWho();
   if (state.level && UNITS[state.level.type]) disposeView();
@@ -235,8 +266,20 @@ function renderHome() {
   root.innerHTML = '';
   // きょう もう やった もんだい（「きょう はじめて +5」を だす ため）
   const todayLevels = (loadWallet(currentProfile().id).days[todayKey()] || {}).levels || [];
+  // とくべつ かだい：いちばん うえに いつも ひらいて おく
+  const special = LEVELS.filter((l) => l.special);
+  if (special.length) {
+    const box = document.createElement('div');
+    box.className = 'special-box';
+    box.innerHTML = `<div class="special-head"><span class="special-badge">🌟 とくべつ かだい</span><b>${special[0].group.replace(/^.*：/, '')}</b></div>`;
+    const grid = document.createElement('div');
+    grid.className = 'level-grid';
+    for (const level of special) grid.appendChild(levelCard(level, todayLevels));
+    box.appendChild(grid);
+    root.appendChild(box);
+  }
   root.appendChild(testCard());
-  const groups = [...new Set(LEVELS.map((l) => l.group))];
+  const groups = [...new Set(LEVELS.filter((l) => !l.special).map((l) => l.group))];
   const open = loadOpenGroups();
   for (const g of groups) {
     // 大こうもくを タップすると 小こうもくが ひらく
@@ -255,35 +298,7 @@ function renderHome() {
 
     const grid = document.createElement('div');
     grid.className = 'level-grid';
-    for (const level of LEVELS.filter((l) => l.group === g)) {
-      const best = level.type === 'free' ? null : bestOf(level.id);
-      let bestText = '';
-      if (best) {
-        bestText = level.type === 'ta'
-          ? `さいこう ${best.correct}もん`
-          : `さいこう ${best.correct}/${best.total}・${formatTime(best.ms)}`;
-      }
-      const card = document.createElement('button');
-      card.className = `level-card ${level.type}`;
-      // もらえる ポイント（むずかしいほど おおい）
-      let ptText = '';
-      if (level.type !== 'free') {
-        const r = pointRuleFor(level);
-        ptText = r.net ? '⭐ せいかい − まちがい' : `⭐ 1もん ${r.per}pt${r.perfect ? `・ぜんぶ せいかい +${r.perfect}` : ''}`;
-        if (!todayLevels.includes(level.id)) ptText += `・🌅 きょう はじめて +${POINT_RULES.firstOfDay}`;
-      }
-      card.innerHTML = `
-        <span class="t">${level.title}</span>
-        <span class="d">${level.desc}</span>
-        <span class="pt">${ptText}</span>
-        <span class="best">${bestText}</span>`;
-      card.addEventListener('click', () => {
-        if (level.type === 'free') startFree(level);
-        else if (level.type === 'ta') startTimeAttack(level);
-        else startLevel(level, level.make(), false);
-      });
-      grid.appendChild(card);
-    }
+    for (const level of LEVELS.filter((l) => l.group === g)) grid.appendChild(levelCard(level, todayLevels));
     root.appendChild(grid);
   }
   show('home');
@@ -687,7 +702,7 @@ async function countAlong() {
 function renderKeypad(showNext) {
   const pad = $('keypad');
   pad.innerHTML = '';
-  if (showNext) {
+  if (showNext || (curStep() && curStep().kind === 'info')) {
     const next = document.createElement('button');
     next.className = 'key next';
     next.textContent = 'つぎへ ▶';
@@ -838,6 +853,7 @@ const unitApi = {
 
 function hintText() {
   const type = state.level.type;
+  if (curStep() && curStep().hint) return curStep().hint;
   if (tilesOff(type) && type !== 'addn') return 'おしい！もういちど けいさんして みよう';
   if (type === 'add') return 'おしい！「がっちゃん」や「かぞえる」で たしかめよう';
   if (type === 'sub') return 'おしい！「かぞえる」で のこりを かぞえよう';
@@ -993,7 +1009,8 @@ function finish() {
   $('retry-wrong').style.display = wrong.length ? '' : 'none';
   $('retry-all').style.display = '';
   $('retry-wrong').onclick = () =>
-    startLevel(state.level, shuffle(wrong.map(({ a, b, nums }) => (nums ? { a, b, nums } : { a, b }))), true);
+    startLevel(state.level, shuffle(wrong.map(({ firstOk, ms, ...q }) =>
+      (UNITS[state.level.type] ? q : q.nums ? { a: q.a, b: q.b, nums: q.nums } : { a: q.a, b: q.b }))), true);
   $('retry-all').onclick = () => startLevel(state.level, state.level.make(), false);
   show('result');
 }
